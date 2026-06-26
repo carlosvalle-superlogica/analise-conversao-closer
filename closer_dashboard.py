@@ -393,11 +393,11 @@ def modulo_geral(df: pd.DataFrame):
 
     with col_a:
         secao("Por Jornada")
-        st.dataframe(reun_fech_conv(COL_JORNADA, "Jornada"), hide_index=True, width='stretch')
+        st.dataframe(reun_fech_conv(COL_JORNADA, "Jornada"), hide_index=True, width='stretch', height=800)
 
     with col_b:
         secao("Por Tipo de Lead")
-        st.dataframe(reun_fech_conv(COL_TIPO, "Tipo"), hide_index=True, width='stretch')
+        st.dataframe(reun_fech_conv(COL_TIPO, "Tipo"), hide_index=True, width='stretch', height=800)
 
     secao("Performance por Closer")
     perf_reun = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
@@ -407,7 +407,7 @@ def modulo_geral(df: pd.DataFrame):
     perf["Fechados"] = perf["Fechados"].astype(int)
     perf["Conv R→F"] = pd.to_numeric(perf["Fechados"] / perf["Reuniões"].replace(0, float("nan")) * 100, errors="coerce").fillna(0).round(1).astype(str) + "%"
     perf = perf.sort_values("Fechados", ascending=False)
-    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch')
+    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch', height=min(len(perf)*38+50, 900))
 
 
 # ─────────────────────────────────────────────
@@ -432,11 +432,11 @@ def modulo_closers(df: pd.DataFrame):
     with col_a:
         st.markdown("##### 🥇 Top 5 em Fechados")
         top5 = perf.head(5)[[COL_CLOSER, "Reuniões", "Fechados", "Conv R→F"]].copy()
-        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch')
+        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch', height=min(len(top5)*38+50, 300))
     with col_b:
         st.markdown("##### ⚠️ Atenção (menor conv. c/ ≥5 reuniões)")
         bot5 = perf[perf["Reuniões"] >= 5].sort_values("Conv R→F").head(5)[[COL_CLOSER, "Reuniões", "Fechados", "Conv R→F"]].copy()
-        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch')
+        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch', height=min(len(bot5)*38+50, 300))
 
     secao("Reuniões vs Fechados por Closer")
     fig = go.Figure()
@@ -462,7 +462,7 @@ def modulo_closers(df: pd.DataFrame):
         st.plotly_chart(fig2, width='stretch')
 
     secao("Tabela Completa")
-    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch')
+    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch', height=min(len(perf)*38+50, 900))
 
 
 # ─────────────────────────────────────────────
@@ -498,7 +498,7 @@ def modulo_produtos(df: pd.DataFrame):
         )
         st.plotly_chart(fig, width='stretch')
     with col_b:
-        st.dataframe(mix, hide_index=True, width='stretch')
+        st.dataframe(mix, hide_index=True, width='stretch', height=min(len(mix)*38+50, 800))
 
     secao("Produtos por Closer")
     por_closer = exploded.groupby([COL_CLOSER, "produto_list"]).size().reset_index(name="Qtd")
@@ -540,7 +540,7 @@ def modulo_perfil(df: pd.DataFrame):
         tb = rfconv(col, label)
         col_a, col_b = st.columns([1, 1.4])
         with col_a:
-            st.dataframe(tb, hide_index=True, width='stretch')
+            st.dataframe(tb, hide_index=True, width='stretch', height=min(len(tb)*38+50, 800))
         with col_b:
             fig = px.bar(tb, x=label, y=["Reuniões", "Fechados"],
                          barmode="group", color_discrete_sequence=[COLORS[1], color])
@@ -605,7 +605,7 @@ def modulo_comparacao(df: pd.DataFrame):
         tabela["Conv R→F"] = pd.to_numeric(
             tabela["Fechados"] / tabela["Reuniões"].replace(0, float("nan")) * 100,
             errors="coerce").fillna(0).round(1).astype(str) + "%"
-        st.dataframe(tabela, hide_index=True, width='stretch')
+        st.dataframe(tabela, hide_index=True, width='stretch', height=(len(tabela) + 1) * 35 + 10)
 
 
     with aba_closer:
@@ -619,7 +619,7 @@ def modulo_comparacao(df: pd.DataFrame):
                               font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
                               legend=dict(bgcolor="rgba(0,0,0,0)"))
             st.plotly_chart(fig, width='stretch')
-            st.dataframe(pivot, width='stretch')
+            st.dataframe(pivot, width='stretch', height=min(len(pivot)*38+50, 800))
 
     with aba_jornada:
         secao("Fechados por Mês × Jornada")
@@ -632,7 +632,7 @@ def modulo_comparacao(df: pd.DataFrame):
                               font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
                               legend=dict(bgcolor="rgba(0,0,0,0)"))
             st.plotly_chart(fig, width='stretch')
-            st.dataframe(pivot, width='stretch')
+            st.dataframe(pivot, width='stretch', height=min(len(pivot)*38+50, 800))
 
     with aba_tipo:
         secao("Fechados por Mês × Tipo de Lead")
@@ -645,7 +645,7 @@ def modulo_comparacao(df: pd.DataFrame):
                               font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
                               legend=dict(bgcolor="rgba(0,0,0,0)"))
             st.plotly_chart(fig, width='stretch')
-            st.dataframe(pivot, width='stretch')
+            st.dataframe(pivot, width='stretch', height=min(len(pivot)*38+50, 800))
 
 
 # ─────────────────────────────────────────────
@@ -674,7 +674,7 @@ def modulo_perdidos(df: pd.DataFrame):
         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                           font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(fig, width='stretch')
-        st.dataframe(motivos, hide_index=True, width='stretch')
+        st.dataframe(motivos, hide_index=True, width='stretch', height=min(len(motivos)*38+50, 800))
 
     with col_b:
         secao("Perdidos por Closer")
@@ -700,7 +700,7 @@ def modulo_perdidos(df: pd.DataFrame):
     closer_audit = st.selectbox("Filtrar Closer", ["Todos"] + sorted(df_perdidos[COL_CLOSER].dropna().unique().tolist()))
     df_audit = df_perdidos if closer_audit == "Todos" else df_perdidos[df_perdidos[COL_CLOSER] == closer_audit]
     cols_show = [c for c in [COL_NOME, COL_CLOSER, COL_REUNIAO, COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA, COL_ORIGEM] if c in df_audit.columns]
-    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, width='stretch')
+    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, width='stretch', height=min(len(df_audit)*38+50, 800))
 
 
 # ─────────────────────────────────────────────
