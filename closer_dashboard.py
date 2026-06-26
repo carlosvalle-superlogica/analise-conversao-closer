@@ -282,6 +282,12 @@ def render_filtros(df: pd.DataFrame):
             anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
             ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
 
+            etapa_sel = st.selectbox(
+                "Etapa",
+                ["Todas", "Fechado", "Pago"],
+                key="etapa_sel",
+            )
+
         st.markdown("---")
 
         # ── Linha 2: Pessoas ────────────────────────────────────────────────
@@ -352,6 +358,8 @@ def render_filtros(df: pd.DataFrame):
         mask &= df[col_data].dt.date.between(data_ini, data_fim)
     if ano_sel:
         mask &= df["ano_criacao"].isin(ano_sel)
+    if etapa_sel != "Todas":
+        mask &= df[COL_ETAPA] == etapa_sel
     if closer_sel:
         mask &= df[COL_CLOSER].isin(closer_sel)
     if sdr_sel:
