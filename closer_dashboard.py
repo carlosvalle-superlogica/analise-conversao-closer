@@ -20,23 +20,32 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container {
-    padding-top: 2rem !important; padding-bottom: 4rem !important;
+    padding-top: 1.5rem !important; padding-bottom: 10rem !important;
     padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
+[data-testid="stWidgetLabel"] p { font-size: 11px !important; }
+span[data-baseweb="tag"] { font-size: 10px !important; padding: 2px 5px !important; }
+div[data-baseweb="menu"] li { font-size: 11px !important; }
+.filter-block-title {
+    font-size: 10px; font-weight: 700; color: #5BC0DE;
+    text-transform: uppercase; letter-spacing: 1px; margin: 2px 0 6px 0;
+}
 .metric-card {
-    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
-    border: 1px solid #2D2D4E; border-radius: 12px;
-    padding: 20px 24px; text-align: center; margin-bottom: 12px;
+    background: linear-gradient(135deg, #0A1628 0%, #0D1F3C 100%);
+    border: 1px solid #1A3A5C; border-radius: 12px;
+    padding: 18px 20px; text-align: center; margin-bottom: 12px;
 }
-.metric-card .label { font-size: 12px; color: #8888AA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.metric-card .value { font-size: 28px; font-weight: 700; color: #EAEAEA; }
-.metric-card .sub   { font-size: 13px; color: #6C3FC5; margin-top: 4px; }
+.metric-card .label { font-size: 10px; color: #6A8FAF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.metric-card .value { font-size: 26px; font-weight: 700; color: #E8F4FD; }
+.metric-card .sub   { font-size: 11px; color: #3B9ECC; margin-top: 4px; }
 .section-title {
-    font-size: 18px; font-weight: 600; color: #EAEAEA;
-    border-left: 4px solid #6C3FC5; padding-left: 12px; margin: 32px 0 16px 0;
+    font-size: 15px; font-weight: 600; color: #E8F4FD;
+    border-left: 4px solid #2196F3; padding-left: 10px; margin: 28px 0 12px 0;
 }
-div[data-testid="stSidebar"] { background:#0D0D1A; }
+div[data-testid="stSidebar"] { background: #060E1C; }
+[data-testid="stMultiSelect"] span[data-baseweb="tag"] { background-color: #1565C0 !important; color: #E8F4FD !important; }
+hr { border-color: #1A3A5C !important; margin: 8px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,6 +94,7 @@ COL_FECHAMENTO   = 'Date entered "Fechado ([Comercial] Aquisições)"'
 COL_PAGO         = 'Date entered "Pago ([Comercial] Aquisições)"'
 COL_DATA_FECH    = "Data de fechamento"   # coluna nativa — usada como mF
 COL_PRODUTOS     = "[IS/Closer] Produtos Fechados"
+COL_INTERESSE    = "[IS/SDR] Produtos de Interesse do Lead"
 COL_JORNADA      = "[IS] Lead com Jornada:"
 COL_TIPO         = "[IS] Tipo de lead"
 COL_ORIGEM       = "[IS] Origem do lead"
@@ -167,22 +177,12 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────
-# FILTROS GLOBAIS — retorna 3 datasets separados
-#
-# LÓGICA CORRETA:
-#   df_leads    = filtros dimensionais aplicados sobre df, sem filtro de data
-#                 → contagem de leads usa mL (data de criação)
-#   df_reunioes = filtros dimensionais aplicados sobre df[is_reuniao], filtrado por mR
-#   df_fechados = filtros dimensionais aplicados sobre df[is_fechado],  filtrado por mF
-#
-# Cada KPI lê do seu próprio dataset — sem mistura de datas.
+# ─────────────────────────────────────────────
+# FILTROS GLOBAIS
+# Retorna 4 datasets independentes por data.
 # ─────────────────────────────────────────────
 def render_filtros(df: pd.DataFrame):
-    with st.expander("🔍 Filtros Globais", expanded=True):
-
-        # ── Linha 1: Períodos independentes ────────────────────────────────
-        st.markdown("##### 📅 Períodos (cada métrica usa sua própria data)")
-        c1, c2, c3 = st.columns(3)
+    with st.expander("Filtros Globais", expanded=True):
 
         def date_range(col, label, key):
             datas = df[col].dropna()
@@ -192,77 +192,77 @@ def render_filtros(df: pd.DataFrame):
             v = st.date_input(label, value=(mn, mx), min_value=mn, max_value=mx, key=key)
             return (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else (None, None)
 
-        with c1:
-            st.caption("🟢 Leads — Data de Criação")
-            r_L = date_range(COL_CRIACAO, "Período de Criação", "periodo_criacao")
-        with c2:
-            st.caption("🔵 Reuniões — Reunião Ocorrida")
-            r_R = date_range(COL_REUNIAO, "Período de Reunião", "periodo_reuniao")
-        with c3:
-            st.caption("🟣 Fechados — Data de Fechamento")
-            r_F = date_range(COL_DATA_FECH, "Período de Fechamento", "periodo_fechamento")
+        def explode_vals(col):
+            return sorted(set(
+                v.strip()
+                for val in df[col].dropna()
+                for v in str(val).split(";") if v.strip()
+            ))
+
+        # Bloco 1: Datas
+        st.markdown("<div class='filter-block-title'>Periodo</div>", unsafe_allow_html=True)
+        dc1, dc2 = st.columns(2)
+        with dc1:
+            st.caption("Reuniao Ocorrida")
+            r_R = date_range(COL_REUNIAO, "Periodo de Reuniao", "periodo_reuniao")
+        with dc2:
+            st.caption("Data de Fechamento")
+            r_F = date_range(COL_DATA_FECH, "Periodo de Fechamento", "periodo_fechamento")
 
         st.markdown("---")
 
-        # ── Linha 2: Pessoas ────────────────────────────────────────────────
-        c4, c5, c6 = st.columns(3)
-
-        with c4:
-            anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
-            ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
-            etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
-
-        with c5:
+        # Bloco 2: Equipe
+        st.markdown("<div class='filter-block-title'>Equipe</div>", unsafe_allow_html=True)
+        ec1, ec2 = st.columns(2)
+        with ec1:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
             closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
+        with ec2:
             sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
-            sdr_sel = st.multiselect("SDR Responsável", sdrs, default=sdrs, key="sdr_sel")
-
-        with c6:
-            origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
-            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
-            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
-            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
+            sdr_sel = st.multiselect("SDR Responsavel", sdrs, default=sdrs, key="sdr_sel")
 
         st.markdown("---")
 
-        # ── Linha 3: Perfil ─────────────────────────────────────────────────
-        c7, c8, c9 = st.columns(3)
-
-        with c7:
+        # Bloco 3: Lead
+        st.markdown("<div class='filter-block-title'>Lead</div>", unsafe_allow_html=True)
+        lc1, lc2, lc3 = st.columns(3)
+        with lc1:
+            origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
+            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
             tipos = sorted(df[COL_TIPO].dropna().unique().tolist())
             tipo_sel = st.multiselect("Tipo de Lead", tipos, default=tipos, key="tipo_sel")
-
-        with c8:
+        with lc2:
+            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
+            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
+            etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
+        with lc3:
+            interesse_todos = explode_vals(COL_INTERESSE) if COL_INTERESSE in df.columns else []
+            interesse_sel = st.multiselect("Produto de Interesse", interesse_todos, default=[],
+                                           key="interesse_sel", placeholder="Todos (sem filtro)")
             produtos_todos = sorted(set(
                 p.strip()
                 for val in df[COL_PRODUTOS].dropna()
                 for p in str(val).split(";") if p.strip()
             ))
-            produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[],
+            produto_sel = st.multiselect("Produto Fechado", produtos_todos, default=[],
                                          key="produto_sel", placeholder="Todos (sem filtro)")
 
-        with c9:
-            def explode_vals(col):
-                return sorted(set(
-                    v.strip()
-                    for val in df[col].dropna()
-                    for v in str(val).split(";") if v.strip()
-                ))
-            erp_sel = st.multiselect("ERP que utiliza", explode_vals(COL_ERP) if COL_ERP in df.columns else [],
+        st.markdown("---")
+
+        # Bloco 4: Tecnologia
+        st.markdown("<div class='filter-block-title'>Tecnologia</div>", unsafe_allow_html=True)
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            erp_sel = st.multiselect("ERP que utiliza",
+                                     explode_vals(COL_ERP) if COL_ERP in df.columns else [],
                                      default=[], key="erp_sel", placeholder="Todos (sem filtro)")
-            crm_sel = st.multiselect("CRM que utiliza", explode_vals(COL_CRM_USO) if COL_CRM_USO in df.columns else [],
+        with tc2:
+            crm_sel = st.multiselect("CRM que utiliza",
+                                     explode_vals(COL_CRM_USO) if COL_CRM_USO in df.columns else [],
                                      default=[], key="crm_sel", placeholder="Todos (sem filtro)")
 
-    # ─────────────────────────────────────────────────────────────────────
-    # MÁSCARA DIMENSIONAL (independente de data)
-    # Aplica: closer, sdr, origem, jornada, tipo, produto, erp, crm, etapa
-    # NÃO aplica filtro de data aqui — cada sub-dataset aplica sua data
-    # ─────────────────────────────────────────────────────────────────────
     def mask_dim(d):
         m = pd.Series([True] * len(d), index=d.index)
-        if ano_sel:
-            m &= d["ano_criacao"].isin(ano_sel)
         if etapa_sel != "Todas":
             m &= d[COL_ETAPA] == etapa_sel
         if closer_sel:
@@ -279,6 +279,10 @@ def render_filtros(df: pd.DataFrame):
             m &= d[COL_PRODUTOS].fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
             )
+        if interesse_sel and COL_INTERESSE in d.columns:
+            m &= d[COL_INTERESSE].fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in interesse_sel)
+            )
         if erp_sel and COL_ERP in d.columns:
             m &= d[COL_ERP].fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in erp_sel)
@@ -289,44 +293,33 @@ def render_filtros(df: pd.DataFrame):
             )
         return m
 
-    # ── df_leads: leads criados no período mL ───────────────────────────
-    m_leads = pd.Series([True] * len(df), index=df.index)
-    if r_L[0] and r_L[1]:
-        m_leads &= df[COL_CRIACAO].dt.date.between(r_L[0], r_L[1])
-    df_leads = df[m_leads & mask_dim(df)].copy()
+    df_leads = df[mask_dim(df)].copy()
 
-    # ── df_reunioes: reuniões que ocorreram no período mR ───────────────
     m_reun = df["is_reuniao"].copy()
     if r_R[0] and r_R[1]:
         m_reun &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
     df_reunioes = df[m_reun & mask_dim(df)].copy()
 
-    # ── df_fechados: fechados cuja Data de Fechamento está no período mF ─
     m_fech = df["is_fechado"].copy()
     if r_F[0] and r_F[1]:
         m_fech &= df[COL_DATA_FECH].dt.date.between(r_F[0], r_F[1])
-    # filtro de etapa aplicado aqui também: se etapa_sel == "Fechado" ou "Pago", restringe
     if etapa_sel == "Fechado":
         m_fech &= df[COL_ETAPA] == "Fechado"
     elif etapa_sel == "Pago":
         m_fech &= df[COL_ETAPA] == "Pago"
     df_fechados = df[m_fech & mask_dim(df)].copy()
 
-    # ── df_perdidos: perdidos com reunião ocorrida ───────────────────────
     m_perd = df["is_perdido"] & df["is_reuniao"]
-    # usa período de reunião para perdidos
     if r_R[0] and r_R[1]:
         m_perd &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
     df_perdidos = df[m_perd & mask_dim(df)].copy()
 
     return df_leads, df_reunioes, df_fechados, df_perdidos
 
-
-# ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
-PURPLE = "#6C3FC5"
-COLORS = ["#6C3FC5", "#A855F7", "#34D399", "#F59E0B", "#60A5FA", "#F87171", "#818CF8", "#FB923C"]
+PURPLE = "#2196F3"
+COLORS = ["#2196F3", "#42A5F5", "#00BCD4", "#26C6DA", "#0288D1", "#EF5350", "#66BB6A", "#FFA726"]
 
 def pct(a, b):
     return f"{a/b*100:.1f}%" if b > 0 else "0%"
