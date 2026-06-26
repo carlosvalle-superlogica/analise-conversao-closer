@@ -54,8 +54,8 @@ div[data-testid="stSidebar"] { background:#0D0D1A; }
 # AUTENTICAÇÃO
 # ─────────────────────────────────────────────
 USERS = {
-    "admin":    {"password": "closer@2025", "role": "master"},
-    "operador": {"password": "vis@2025",    "role": "operador"},
+    "aquisições": {"password": "2024", "role": "master"},
+    "operador":   {"password": "vis@2025", "role": "operador"},
 }
 
 def login_screen():
@@ -91,7 +91,9 @@ COL_SDR           = "[IS/SDR] SDR Responsável"
 COL_ETAPA         = "Etapa do negócio"
 COL_CRIACAO       = "Data de criação"
 COL_REUNIAO       = "[IS/Closer] Reunião Ocorrida "   # note trailing space
-COL_FECHAMENTO    = "Data de fechamento"
+COL_FECHAMENTO    = 'Date entered "Fechado ([Comercial] Aquisições)"'  # mF — persiste mesmo se avançar para Pago
+COL_PAGO          = 'Date entered "Pago ([Comercial] Aquisições)"'
+COL_FECHAMENTO_FALLBACK = "Data de fechamento"  # fallback se coluna nova não vier no CSV
 COL_PRODUTOS      = "[IS/Closer] Produtos Fechados"
 COL_JORNADA       = "[IS] Lead com Jornada:"
 COL_TIPO          = "[IS] Tipo de lead"
@@ -129,7 +131,11 @@ def load_data(path: str) -> pd.DataFrame:
     global COL_REUNIAO
     COL_REUNIAO = "[IS/Closer] Reunião Ocorrida"
 
-    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO]
+    # Garante COL_FECHAMENTO: usa Date entered Fechado; se ausente, cai para Data de fechamento
+    if COL_FECHAMENTO not in df.columns and COL_FECHAMENTO_FALLBACK in df.columns:
+        df[COL_FECHAMENTO] = df[COL_FECHAMENTO_FALLBACK]
+
+    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -145,6 +151,8 @@ def load_data(path: str) -> pd.DataFrame:
     if COL_FECHAMENTO in df.columns:
         df["mes_fechamento"]    = df[COL_FECHAMENTO].dt.to_period("M")
         df["mes_fechamento_dt"] = df[COL_FECHAMENTO].dt.strftime("%Y-%m")
+    if COL_PAGO in df.columns:
+        df["mes_pago_dt"] = df[COL_PAGO].dt.strftime("%Y-%m")
 
     # Flag fechado
     df["is_fechado"]  = df[COL_ETAPA].isin(ETAPAS_FECHADO)
