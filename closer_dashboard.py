@@ -381,25 +381,30 @@ def modulo_geral(df: pd.DataFrame):
 
     col_a, col_b = st.columns(2)
 
+    def reun_fech_conv(dim_col, dim_label):
+        """Tabela: Dimensão | Reuniões | Fechados | Conv R→F%"""
+        r = df_reunioes.groupby(dim_col).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(dim_col).size().reset_index(name="Fechados")
+        tb = r.merge(f, on=dim_col, how="outer").fillna(0)
+        tb["Reuniões"] = tb["Reuniões"].astype(int)
+        tb["Fechados"] = tb["Fechados"].astype(int)
+        tb["Conv R→F"] = pd.to_numeric(
+            tb["Fechados"] / tb["Reuniões"].replace(0, float("nan")) * 100,
+            errors="coerce").fillna(0).round(1).astype(str) + "%"
+        return tb.sort_values("Fechados", ascending=False).rename(columns={dim_col: dim_label})
+
     with col_a:
-        secao("Fechados por Jornada")
-        grp = df_fechados.groupby(COL_JORNADA).size().reset_index(name="Fechados")
-        grp = grp.sort_values("Fechados", ascending=False)
-        st.dataframe(grp.rename(columns={COL_JORNADA: "Jornada"}), hide_index=True, width='stretch')
+        secao("Por Jornada")
+        st.dataframe(reun_fech_conv(COL_JORNADA, "Jornada"), hide_index=True, width='stretch')
 
     with col_b:
-        secao("Fechados por Tipo de Lead")
-        grp2 = df_fechados.groupby(COL_TIPO).size().reset_index(name="Fechados")
-        grp2 = grp2.sort_values("Fechados", ascending=False)
-        st.dataframe(grp2.rename(columns={COL_TIPO: "Tipo"}), hide_index=True, width='stretch')
+        secao("Por Tipo de Lead")
+        st.dataframe(reun_fech_conv(COL_TIPO, "Tipo"), hide_index=True, width='stretch')
 
     secao("Performance por Closer")
-    perf_leads = df_leads.groupby(COL_CLOSER).size().reset_index(name="Leads")
-    perf_reun  = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
-    perf_fech  = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
-    perf = perf_leads.merge(perf_reun, on=COL_CLOSER, how="outer") \
-                     .merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
-    perf["Leads"]    = perf["Leads"].astype(int)
+    perf_reun = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
+    perf_fech = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf = perf_reun.merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
     perf["Reuniões"] = perf["Reuniões"].astype(int)
     perf["Fechados"] = perf["Fechados"].astype(int)
     perf["Conv R→F"] = pd.to_numeric(perf["Fechados"] / perf["Reuniões"].replace(0, float("nan")) * 100, errors="coerce").fillna(0).round(1).astype(str) + "%"
