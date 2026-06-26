@@ -586,17 +586,7 @@ def modulo_comparacao(df: pd.DataFrame):
         gR = df_reunioes.groupby("mes_reuniao_dt").size().reset_index(name="Reuniões")
         gF = df_fechados.groupby("mes_fechamento_dt").size().reset_index(name="Fechados")
 
-        fig = go.Figure()
-        fig.add_trace(go.Bar(name="Reuniões", x=gR["mes_reuniao_dt"],    y=gR["Reuniões"], marker_color=COLORS[1]))
-        fig.add_trace(go.Bar(name="Fechados", x=gF["mes_fechamento_dt"], y=gF["Fechados"], marker_color=COLORS[2]))
-        fig.update_layout(
-            barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=40),
-            legend=dict(bgcolor="rgba(0,0,0,0)")
-        )
-        st.plotly_chart(fig, width='stretch')
-
-        # Tabela unificada: Mês | Reuniões | Fechados | Conv%
+        # Tabela unificada
         tabela = gR.rename(columns={"mes_reuniao_dt": "Mês"}).merge(
             gF.rename(columns={"mes_fechamento_dt": "Mês"}), on="Mês", how="outer"
         ).fillna(0).sort_values("Mês")
@@ -605,7 +595,24 @@ def modulo_comparacao(df: pd.DataFrame):
         tabela["Conv R→F"] = pd.to_numeric(
             tabela["Fechados"] / tabela["Reuniões"].replace(0, float("nan")) * 100,
             errors="coerce").fillna(0).round(1).astype(str) + "%"
-        st.dataframe(tabela, hide_index=True, width='stretch', height=(len(tabela) + 1) * 35 + 10)
+
+        col_tab, col_chart = st.columns([1, 2])
+
+        with col_tab:
+            st.dataframe(tabela, hide_index=True, width='stretch',
+                         height=(len(tabela) + 1) * 38 + 10)
+
+        with col_chart:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name="Reuniões", x=gR["mes_reuniao_dt"],    y=gR["Reuniões"], marker_color=COLORS[1]))
+            fig.add_trace(go.Bar(name="Fechados", x=gF["mes_fechamento_dt"], y=gF["Fechados"], marker_color=COLORS[2]))
+            fig.update_layout(
+                barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=(len(tabela) + 1) * 38 + 10,
+                margin=dict(l=0, r=0, t=10, b=10),
+                legend=dict(bgcolor="rgba(0,0,0,0)")
+            )
+            st.plotly_chart(fig, width='stretch')
 
 
     with aba_closer:
