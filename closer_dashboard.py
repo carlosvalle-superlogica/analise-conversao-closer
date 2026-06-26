@@ -415,14 +415,11 @@ def modulo_geral(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_closers(df: pd.DataFrame):
     st.title("🏆 Performance de Closers")
-    df_leads, df_reunioes, df_fechados, _ = render_filtros(df)
+    _, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    perf_leads = df_leads.groupby(COL_CLOSER).size().reset_index(name="Leads")
-    perf_reun  = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
-    perf_fech  = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
-    perf = perf_leads.merge(perf_reun, on=COL_CLOSER, how="outer") \
-                     .merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
-    perf["Leads"]    = perf["Leads"].astype(int)
+    perf_reun = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
+    perf_fech = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf = perf_reun.merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
     perf["Reuniões"] = perf["Reuniões"].astype(int)
     perf["Fechados"] = perf["Fechados"].astype(int)
     perf["_conv_rf"] = pd.to_numeric(perf["Fechados"] / perf["Reuniões"].replace(0, float("nan")) * 100, errors="coerce").fillna(0).round(1)
