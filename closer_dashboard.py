@@ -107,6 +107,7 @@ COL_SUBMOTIVO    = "Motivo de Fechamento Perdido (Sub-motivo)"
 COL_DESC_PERDA   = "Descrição de fechamento perdido"
 COL_ERP          = "[IS/SDR] Qual ERP utiliza?"
 COL_CRM_USO      = "[IS/SDR] Qual CRM utiliza?"
+COL_TAG          = "TAG - Comercial B2B"
 
 ETAPAS_FECHADO = ["Fechado", "Pago"]
 
@@ -259,7 +260,7 @@ def render_filtros(df: pd.DataFrame):
 
         # Bloco 4: Tecnologia
         st.markdown("<div class='filter-block-title'>Tecnologia</div>", unsafe_allow_html=True)
-        tc1, tc2 = st.columns(2)
+        tc1, tc2, tc3 = st.columns(3)
         with tc1:
             erp_sel = st.multiselect("ERP que utiliza",
                                      explode_vals(COL_ERP) if COL_ERP in df.columns else [],
@@ -268,6 +269,10 @@ def render_filtros(df: pd.DataFrame):
             crm_sel = st.multiselect("CRM que utiliza",
                                      explode_vals(COL_CRM_USO) if COL_CRM_USO in df.columns else [],
                                      default=[], key="crm_sel", placeholder="Todos (sem filtro)")
+        with tc3:
+            tag_todos = sorted(df[COL_TAG].dropna().unique().tolist()) if COL_TAG in df.columns else []
+            tag_sel = st.multiselect("TAG Comercial", tag_todos,
+                                     default=[], key="tag_sel", placeholder="Todos (sem filtro)")
 
     def mask_dim(d):
         m = pd.Series([True] * len(d), index=d.index)
@@ -299,6 +304,8 @@ def render_filtros(df: pd.DataFrame):
             m &= d[COL_CRM_USO].fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
             )
+        if tag_sel and COL_TAG in d.columns:
+            m &= d[COL_TAG].isin(tag_sel)
         return m
 
     df_leads = df[mask_dim(df)].copy()
