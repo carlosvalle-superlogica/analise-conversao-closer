@@ -168,22 +168,15 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────
-# FILTROS GLOBAIS — retorna 3 datasets separados
-#
-# LÓGICA CORRETA:
-#   df_leads    = filtros dimensionais aplicados sobre df, sem filtro de data
-#                 → contagem de leads usa mL (data de criação)
-#   df_reunioes = filtros dimensionais aplicados sobre df[is_reuniao], filtrado por mR
-#   df_fechados = filtros dimensionais aplicados sobre df[is_fechado],  filtrado por mF
-#
-# Cada KPI lê do seu próprio dataset — sem mistura de datas.
+# FILTROS GLOBAIS
+# Retorna 4 datasets independentes por data:
+#   df_leads    → sem filtro de data (todos os leads dimensionais)
+#   df_reunioes → filtrado por Período de Reunião (mR)
+#   df_fechados → filtrado por Período de Fechamento (mF = Data de fechamento)
+#   df_perdidos → perdidos com reunião no período mR
 # ─────────────────────────────────────────────
 def render_filtros(df: pd.DataFrame):
     with st.expander("🔍 Filtros Globais", expanded=True):
-
-        # ── Linha 1: Períodos independentes ────────────────────────────────
-        st.markdown("##### 📅 Períodos (cada métrica usa sua própria data)")
-        c1, c2, c3 = st.columns(3)
 
         def date_range(col, label, key):
             datas = df[col].dropna()
@@ -193,85 +186,81 @@ def render_filtros(df: pd.DataFrame):
             v = st.date_input(label, value=(mn, mx), min_value=mn, max_value=mx, key=key)
             return (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else (None, None)
 
-        with c1:
-            st.caption("🟢 Leads — Data de Criação")
-            r_L = date_range(COL_CRIACAO, "Período de Criação", "periodo_criacao")
-        with c2:
-            st.caption("🔵 Reuniões — Reunião Ocorrida")
+        def explode_vals(col):
+            return sorted(set(
+                v.strip()
+                for val in df[col].dropna()
+                for v in str(val).split(";") if v.strip()
+            ))
+
+        # ── Bloco 1: Datas (2 colunas simétricas) ──────────────────────────
+        st.markdown("##### 📅 Período")
+        dc1, dc2 = st.columns(2)
+        with dc1:
+            st.caption("🔵 Reunião Ocorrida")
             r_R = date_range(COL_REUNIAO, "Período de Reunião", "periodo_reuniao")
-        with c3:
-            st.caption("🟣 Fechados — Data de Fechamento")
+        with dc2:
+            st.caption("🟣 Data de Fechamento")
             r_F = date_range(COL_DATA_FECH, "Período de Fechamento", "periodo_fechamento")
 
         st.markdown("---")
 
-        # ── Linha 2: Pessoas ────────────────────────────────────────────────
-        c4, c5, c6 = st.columns(3)
-
-        with c4:
-            anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
-            ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
-            etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
-
-        with c5:
+        # ── Bloco 2: Equipe (2 colunas) ────────────────────────────────────
+        st.markdown("##### 👥 Equipe")
+        ec1, ec2 = st.columns(2)
+        with ec1:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
             closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
+        with ec2:
             sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
             sdr_sel = st.multiselect("SDR Responsável", sdrs, default=sdrs, key="sdr_sel")
 
-        with c6:
-            origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
-            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
-            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
-            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
-
         st.markdown("---")
 
-        # ── Linha 3: Perfil ─────────────────────────────────────────────────
-        c7, c8, c9 = st.columns(3)
-
-        with c7:
+        # ── Bloco 3: Lead (3 colunas) ──────────────────────────────────────
+        st.markdown("##### 🎯 Lead")
+        lc1, lc2, lc3 = st.columns(3)
+        with lc1:
+            origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
+            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
             tipos = sorted(df[COL_TIPO].dropna().unique().tolist())
             tipo_sel = st.multiselect("Tipo de Lead", tipos, default=tipos, key="tipo_sel")
-
-        with c8:
+        with lc2:
+            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
+            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
+            etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
+        with lc3:
+            interesse_todos = explode_vals(COL_INTERESSE) if COL_INTERESSE in df.columns else []
+            interesse_sel = st.multiselect("Produto de Interesse", interesse_todos, default=[],
+                                           key="interesse_sel", placeholder="Todos (sem filtro)")
             produtos_todos = sorted(set(
                 p.strip()
                 for val in df[COL_PRODUTOS].dropna()
                 for p in str(val).split(";") if p.strip()
             ))
-            produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[],
+            produto_sel = st.multiselect("Produto Fechado", produtos_todos, default=[],
                                          key="produto_sel", placeholder="Todos (sem filtro)")
 
-            interesse_todos = sorted(set(
-                p.strip()
-                for val in df[COL_INTERESSE].dropna()
-                for p in str(val).split(";") if p.strip()
-            )) if COL_INTERESSE in df.columns else []
-            interesse_sel = st.multiselect("Produto de Interesse", interesse_todos, default=[],
-                                           key="interesse_sel", placeholder="Todos (sem filtro)")
+        st.markdown("---")
 
-        with c9:
-            def explode_vals(col):
-                return sorted(set(
-                    v.strip()
-                    for val in df[col].dropna()
-                    for v in str(val).split(";") if v.strip()
-                ))
+        # ── Bloco 4: Tecnologia (2 colunas) ────────────────────────────────
+        st.markdown("##### 💻 Tecnologia")
+        tc1, tc2 = st.columns(2)
+        with tc1:
             erp_sel = st.multiselect("ERP que utiliza", explode_vals(COL_ERP) if COL_ERP in df.columns else [],
                                      default=[], key="erp_sel", placeholder="Todos (sem filtro)")
+        with tc2:
             crm_sel = st.multiselect("CRM que utiliza", explode_vals(COL_CRM_USO) if COL_CRM_USO in df.columns else [],
                                      default=[], key="crm_sel", placeholder="Todos (sem filtro)")
 
+    # Ano não é mais filtro; mantido apenas para compatibilidade interna (não exposto)
+    ano_sel = []
+
     # ─────────────────────────────────────────────────────────────────────
     # MÁSCARA DIMENSIONAL (independente de data)
-    # Aplica: closer, sdr, origem, jornada, tipo, produto, erp, crm, etapa
-    # NÃO aplica filtro de data aqui — cada sub-dataset aplica sua data
     # ─────────────────────────────────────────────────────────────────────
     def mask_dim(d):
         m = pd.Series([True] * len(d), index=d.index)
-        if ano_sel:
-            m &= d["ano_criacao"].isin(ano_sel)
         if etapa_sel != "Todas":
             m &= d[COL_ETAPA] == etapa_sel
         if closer_sel:
@@ -302,11 +291,8 @@ def render_filtros(df: pd.DataFrame):
             )
         return m
 
-    # ── df_leads: leads criados no período mL ───────────────────────────
-    m_leads = pd.Series([True] * len(df), index=df.index)
-    if r_L[0] and r_L[1]:
-        m_leads &= df[COL_CRIACAO].dt.date.between(r_L[0], r_L[1])
-    df_leads = df[m_leads & mask_dim(df)].copy()
+    # ── df_leads: todos os leads (sem filtro de data) ──────────────────
+    df_leads = df[mask_dim(df)].copy()
 
     # ── df_reunioes: reuniões que ocorreram no período mR ───────────────
     m_reun = df["is_reuniao"].copy()
