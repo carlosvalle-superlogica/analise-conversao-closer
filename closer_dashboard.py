@@ -1,3 +1,4 @@
+# v2.0 - Python 3.14 + Pandas 3.0 compatible
 import streamlit as st
 import pandas as pd
 import plotly.express as px
