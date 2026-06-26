@@ -20,7 +20,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container {
-    padding-top: 2rem !important; padding-bottom: 4rem !important;
+    padding-top: 2rem !important; padding-bottom: 10rem !important;
     padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
@@ -581,13 +581,12 @@ def modulo_comparacao(df: pd.DataFrame):
     )
 
     with aba_geral:
-        secao("Leads, Reuniões e Fechados por Mês")
-        gL = df_leads.groupby("mes_criacao_dt").size().reset_index(name="Leads")
+        secao("Reuniões e Fechados por Mês")
         gR = df_reunioes.groupby("mes_reuniao_dt").size().reset_index(name="Reuniões")
         gF = df_fechados.groupby("mes_fechamento_dt").size().reset_index(name="Fechados")
 
+        # Gráfico: Reuniões e Fechados lado a lado
         fig = go.Figure()
-        fig.add_trace(go.Bar(name="Leads",    x=gL["mes_criacao_dt"],    y=gL["Leads"],    marker_color=COLORS[0]))
         fig.add_trace(go.Bar(name="Reuniões", x=gR["mes_reuniao_dt"],    y=gR["Reuniões"], marker_color=COLORS[1]))
         fig.add_trace(go.Bar(name="Fechados", x=gF["mes_fechamento_dt"], y=gF["Fechados"], marker_color=COLORS[2]))
         fig.update_layout(
@@ -597,16 +596,15 @@ def modulo_comparacao(df: pd.DataFrame):
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.caption("Leads por mês de criação")
-            st.dataframe(gL.rename(columns={"mes_criacao_dt": "Mês"}), hide_index=True, use_container_width=True)
-        with col_b:
-            st.caption("Reuniões por mês")
-            st.dataframe(gR.rename(columns={"mes_reuniao_dt": "Mês"}), hide_index=True, use_container_width=True)
-        with col_c:
-            st.caption("Fechados por mês")
-            st.dataframe(gF.rename(columns={"mes_fechamento_dt": "Mês"}), hide_index=True, use_container_width=True)
+        # Tabela unificada: Mês | Reuniões | Fechados | Conv%
+        tabela = gR.rename(columns={"mes_reuniao_dt": "Mês"}).merge(
+            gF.rename(columns={"mes_fechamento_dt": "Mês"}),
+            on="Mês", how="outer"
+        ).fillna(0).sort_values("Mês")
+        tabela["Reuniões"] = tabela["Reuniões"].astype(int)
+        tabela["Fechados"] = tabela["Fechados"].astype(int)
+        tabela["Conv R→F"] = (tabela["Fechados"] / tabela["Reuniões"].where(tabela["Reuniões"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
+        st.dataframe(tabela, hide_index=True, use_container_width=True)
 
     with aba_closer:
         secao("Fechados por Mês × Closer")
