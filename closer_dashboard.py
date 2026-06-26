@@ -95,6 +95,7 @@ COL_FECHAMENTO   = 'Date entered "Fechado ([Comercial] Aquisições)"'
 COL_PAGO         = 'Date entered "Pago ([Comercial] Aquisições)"'
 COL_DATA_FECH    = "Data de fechamento"   # coluna nativa — usada como mF
 COL_PRODUTOS     = "[IS/Closer] Produtos Fechados"
+COL_VALOR        = "Valor"
 COL_INTERESSE    = "[IS/SDR] Produtos de Interesse do Lead"
 COL_JORNADA      = "[IS] Lead com Jornada:"
 COL_TIPO         = "[IS] Tipo de lead"
@@ -159,6 +160,7 @@ with st.sidebar:
     modulos = [
         "📊 Dashboard Geral",
         "🏆 Performance de Closers",
+        "💰 Receita",
         "📦 Produtos Fechados",
         "🧩 Perfil do Lead",
         "📈 Comparação Mês a Mês",
@@ -710,6 +712,143 @@ def modulo_perdidos(df: pd.DataFrame):
     st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, width='stretch', height=min(len(df_audit)*38+50, 800))
 
 
+
+# ─────────────────────────────────────────────
+# MÓDULO: RECEITA
+# ─────────────────────────────────────────────
+def modulo_receita(df: pd.DataFrame):
+    st.title("💰 Receita")
+    _, _, df_fechados, _ = render_filtros(df)
+
+    # Garante coluna Valor numérica
+    if COL_VALOR not in df_fechados.columns:
+        st.warning("Coluna 'Valor' não encontrada no CSV.")
+        return
+
+    dff = df_fechados.copy()
+    dff[COL_VALOR] = pd.to_numeric(dff[COL_VALOR], errors="coerce").fillna(0)
+
+    receita_total = dff[COL_VALOR].sum()
+    n_fechados    = len(dff)
+    ticket_medio  = receita_total / n_fechados if n_fechados > 0 else 0
+
+    # ── KPIs ────────────────────────────────────────────────────────────────
+    secao("Visão Geral")
+    k1, k2, k3 = st.columns(3)
+    with k1: metric_card("Receita Total",   f"R$ {receita_total:,.0f}".replace(",", "."))
+    with k2: metric_card("Contratos Fechados", f"{n_fechados:,}")
+    with k3: metric_card("Ticket Médio",    f"R$ {ticket_medio:,.0f}".replace(",", "."))
+
+    # ── Evolução Mensal ──────────────────────────────────────────────────────
+    secao("Evolução Mensal")
+    if "mes_fechamento_dt" in dff.columns:
+        mensal = dff.groupby("mes_fechamento_dt").agg(
+            Receita=(COL_VALOR, "sum"),
+            Contratos=(COL_ID, "count"),
+        ).reset_index().sort_values("mes_fechamento_dt")
+        mensal["Ticket Médio"] = pd.to_numeric(
+            mensal["Receita"] / mensal["Contratos"].replace(0, float("nan")),
+            errors="coerce").fillna(0).round(0)
+        mensal["Receita_fmt"]      = mensal["Receita"].apply(lambda x: f"R$ {x:,.0f}".replace(",", "."))
+        mensal["Ticket Médio_fmt"] = mensal["Ticket Médio"].apply(lambda x: f"R$ {x:,.0f}".replace(",", "."))
+
+        col_tab, col_chart = st.columns([1, 2])
+        with col_tab:
+            disp = mensal[["mes_fechamento_dt", "Receita_fmt", "Contratos", "Ticket Médio_fmt"]].copy()
+            disp.columns = ["Mês", "Receita", "Contratos", "Ticket Médio"]
+            st.dataframe(disp, hide_index=True, width='stretch',
+                         height=(len(disp) + 1) * 38 + 10)
+        with col_chart:
+            fig_m = go.Figure()
+            fig_m.add_trace(go.Bar(name="Receita (R$)", x=mensal["mes_fechamento_dt"],
+                                   y=mensal["Receita"], marker_color=COLORS[2], yaxis="y1"))
+            fig_m.add_trace(go.Scatter(name="Ticket Médio", x=mensal["mes_fechamento_dt"],
+                                       y=mensal["Ticket Médio"], mode="lines+markers",
+                                       marker_color=COLORS[3], yaxis="y2"))
+            fig_m.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=(len(mensal) + 1) * 38 + 10,
+                margin=dict(l=0, r=0, t=10, b=10),
+                legend=dict(bgcolor="rgba(0,0,0,0)"),
+                yaxis=dict(title="Receita (R$)", showgrid=False),
+                yaxis2=dict(title="Ticket Médio", overlaying="y", side="right", showgrid=False),
+            )
+            st.plotly_chart(fig_m, width='stretch')
+
+    # ── Helper: tabela Receita + Contratos + Ticket Médio por dimensão ───────
+    def dim_table(col, label):
+        grp = dff.groupby(col).agg(
+            Receita=(COL_VALOR, "sum"),
+            Contratos=(COL_ID, "count"),
+        ).reset_index().sort_values("Receita", ascending=False)
+        grp["Ticket Médio"] = pd.to_numeric(
+            grp["Receita"] / grp["Contratos"].replace(0, float("nan")),
+            errors="coerce").fillna(0).round(0).astype(int)
+        grp["Receita"]      = grp["Receita"].round(0).astype(int)
+        return grp.rename(columns={col: label})
+
+    def render_dim(col, label, color_idx=2):
+        tb = dim_table(col, label)
+        col_a, col_b = st.columns([1, 1.4])
+        with col_a:
+            st.dataframe(tb, hide_index=True, width='stretch',
+                         height=min(len(tb) * 38 + 50, 800))
+        with col_b:
+            fig = px.bar(tb.head(15), x=label, y="Receita",
+                         color_discrete_sequence=[COLORS[color_idx]], text="Receita")
+            fig.update_traces(texttemplate="R$ %{text:,.0f}", textposition="outside")
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=30, b=0),
+                yaxis_title="Receita (R$)", xaxis_title="")
+            fig.update_xaxes(tickangle=30)
+            st.plotly_chart(fig, width='stretch')
+
+    # ── Por Closer ───────────────────────────────────────────────────────────
+    secao("Por Closer")
+    render_dim(COL_CLOSER, "Closer", color_idx=1)
+
+    # ── Por Produto ──────────────────────────────────────────────────────────
+    secao("Por Produto Fechado")
+    dff_prod = dff[dff[COL_PRODUTOS].notna()].copy()
+    if not dff_prod.empty:
+        dff_prod["produto_list"] = dff_prod[COL_PRODUTOS].str.split(";")
+        exp = dff_prod.explode("produto_list")
+        exp["produto_list"] = exp["produto_list"].str.strip()
+        exp = exp[exp["produto_list"] != ""]
+        grp_prod = exp.groupby("produto_list").agg(
+            Receita=(COL_VALOR, "sum"),
+            Contratos=(COL_ID, "count"),
+        ).reset_index().sort_values("Receita", ascending=False)
+        grp_prod["Ticket Médio"] = pd.to_numeric(
+            grp_prod["Receita"] / grp_prod["Contratos"].replace(0, float("nan")),
+            errors="coerce").fillna(0).round(0).astype(int)
+        grp_prod["Receita"] = grp_prod["Receita"].round(0).astype(int)
+        grp_prod = grp_prod.rename(columns={"produto_list": "Produto"})
+        col_a, col_b = st.columns([1, 1.4])
+        with col_a:
+            st.dataframe(grp_prod, hide_index=True, width='stretch',
+                         height=min(len(grp_prod) * 38 + 50, 800))
+        with col_b:
+            fig_p = px.bar(grp_prod.head(15), x="Produto", y="Receita",
+                           color_discrete_sequence=[COLORS[2]], text="Receita")
+            fig_p.update_traces(texttemplate="R$ %{text:,.0f}", textposition="outside")
+            fig_p.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=420, margin=dict(l=0, r=0, t=30, b=0),
+                yaxis_title="Receita (R$)", xaxis_title="")
+            fig_p.update_xaxes(tickangle=30)
+            st.plotly_chart(fig_p, width='stretch')
+
+    # ── Por Tipo de Lead ─────────────────────────────────────────────────────
+    secao("Por Tipo de Lead")
+    render_dim(COL_TIPO, "Tipo de Lead", color_idx=3)
+
+    # ── Por Origem ───────────────────────────────────────────────────────────
+    secao("Por Origem do Lead")
+    render_dim(COL_ORIGEM, "Origem", color_idx=4)
+
+
 # ─────────────────────────────────────────────
 # ROTEAMENTO
 # ─────────────────────────────────────────────
@@ -721,6 +860,7 @@ df = st.session_state["df"]
 
 if   modulo == "📊 Dashboard Geral":           modulo_geral(df)
 elif modulo == "🏆 Performance de Closers":    modulo_closers(df)
+elif modulo == "💰 Receita":                   modulo_receita(df)
 elif modulo == "📦 Produtos Fechados":          modulo_produtos(df)
 elif modulo == "🧩 Perfil do Lead":             modulo_perfil(df)
 elif modulo == "📈 Comparação Mês a Mês":       modulo_comparacao(df)
