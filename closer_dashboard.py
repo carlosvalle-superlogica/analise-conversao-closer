@@ -65,7 +65,7 @@ def login_screen():
     with col:
         user = st.text_input("Usuário")
         pwd  = st.text_input("Senha", type="password")
-        if st.button("Entrar", use_container_width=True):
+        if st.button("Entrar", width="stretch"):
             if user in USERS and USERS[user]["password"] == pwd:
                 st.session_state["logged_in"] = True
                 st.session_state["user"]      = user
@@ -325,7 +325,7 @@ def modulo_geral(df: pd.DataFrame):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font_color="#EAEAEA", height=320, margin=dict(l=0, r=0, t=10, b=0)
     )
-    st.plotly_chart(fig_funil, use_container_width=True)
+    st.plotly_chart(fig_funil, width="stretch")
 
     col_a, col_b = st.columns(2)
 
@@ -337,7 +337,7 @@ def modulo_geral(df: pd.DataFrame):
             Fechados=("is_fechado", "sum"),
         ).reset_index()
         grp["Conv%"] = (grp["Fechados"] / grp["Leads"] * 100).round(1).astype(str) + "%"
-        st.dataframe(grp.rename(columns={COL_JORNADA: "Jornada"}), hide_index=True, use_container_width=True)
+        st.dataframe(grp.rename(columns={COL_JORNADA: "Jornada"}), hide_index=True, width="stretch")
 
     with col_b:
         secao("Por Tipo de Lead")
@@ -348,7 +348,7 @@ def modulo_geral(df: pd.DataFrame):
         ).reset_index()
         grp2["Conv%"] = (grp2["Fechados"] / grp2["Leads"] * 100).round(1).astype(str) + "%"
         grp2 = grp2.sort_values("Leads", ascending=False)
-        st.dataframe(grp2.rename(columns={COL_TIPO: "Tipo"}), hide_index=True, use_container_width=True)
+        st.dataframe(grp2.rename(columns={COL_TIPO: "Tipo"}), hide_index=True, width="stretch")
 
     secao("Top Origens (Leads)")
     orig = dff[COL_ORIGEM].value_counts().head(15).reset_index()
@@ -360,7 +360,7 @@ def modulo_geral(df: pd.DataFrame):
         font_color="#EAEAEA", height=420, yaxis_title="", xaxis_title="Leads",
         margin=dict(l=0, r=0, t=10, b=0)
     )
-    st.plotly_chart(fig_orig, use_container_width=True)
+    st.plotly_chart(fig_orig, width="stretch")
 
     secao("Performance por Closer (Funil)")
     perf = dff.groupby(COL_CLOSER).agg(
@@ -369,9 +369,9 @@ def modulo_geral(df: pd.DataFrame):
         Fechados=("is_fechado", "sum"),
     ).reset_index()
     perf["Conv L→F"] = (perf["Fechados"] / perf["Leads"] * 100).round(1).astype(str) + "%"
-    perf["Conv R→F"] = (perf["Fechados"] / perf["Reunioes"].replace(0, pd.NA) * 100).round(1).fillna(0).astype(str) + "%"
+    perf["Conv R→F"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
     perf = perf.sort_values("Fechados", ascending=False)
-    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
+    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
 
 
 # ─────────────────────────────────────────────
@@ -386,7 +386,7 @@ def modulo_closers(df: pd.DataFrame):
         Reunioes=("is_reuniao", "sum"),
         Fechados=("is_fechado", "sum"),
     ).reset_index()
-    perf["Conv R→F (%)"] = (perf["Fechados"] / perf["Reunioes"].replace(0, pd.NA) * 100).round(1).fillna(0)
+    perf["Conv R→F (%)"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1)
     perf["Conv L→F (%)"] = (perf["Fechados"] / perf["Leads"] * 100).round(1)
     perf = perf.sort_values("Conv R→F (%)", ascending=False).reset_index(drop=True)
 
@@ -398,12 +398,12 @@ def modulo_closers(df: pd.DataFrame):
         st.markdown("##### 🥇 Top 5")
         top5 = perf.head(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
         top5["Conv R→F (%)"] = top5["Conv R→F (%)"].astype(str) + "%"
-        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
+        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
     with col_b:
         st.markdown("##### ⚠️ Atenção (bottom 5 com ≥5 reuniões)")
         bot5 = perf[perf["Reunioes"] >= 5].tail(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
         bot5["Conv R→F (%)"] = bot5["Conv R→F (%)"].astype(str) + "%"
-        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
+        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
 
     secao("Reuniões vs Fechados por Closer")
     fig = go.Figure()
@@ -414,7 +414,7 @@ def modulo_closers(df: pd.DataFrame):
         font_color="#EAEAEA", height=380, margin=dict(l=0, r=0, t=10, b=0),
         legend=dict(bgcolor="rgba(0,0,0,0)")
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     secao("Evolução Mensal por Closer")
     if "mes_reuniao_dt" in dff.columns:
@@ -427,13 +427,13 @@ def modulo_closers(df: pd.DataFrame):
             margin=dict(l=0, r=0, t=10, b=0), legend_title="Closer",
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     secao("Tabela Completa")
     perf_disp = perf.copy()
     perf_disp["Conv R→F (%)"] = perf_disp["Conv R→F (%)"].astype(str) + "%"
     perf_disp["Conv L→F (%)"] = perf_disp["Conv L→F (%)"].astype(str) + "%"
-    st.dataframe(perf_disp.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
+    st.dataframe(perf_disp.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
 
 
 # ─────────────────────────────────────────────
@@ -467,9 +467,9 @@ def modulo_produtos(df: pd.DataFrame):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font_color="#EAEAEA", height=420, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with col_b:
-        st.dataframe(mix, hide_index=True, use_container_width=True)
+        st.dataframe(mix, hide_index=True, width="stretch")
 
     secao("Produtos por Closer")
     por_closer = exploded.groupby([COL_CLOSER, "produto_list"]).size().reset_index(name="Qtd")
@@ -484,7 +484,7 @@ def modulo_produtos(df: pd.DataFrame):
         height=380, margin=dict(l=0, r=0, t=10, b=0),
         legend=dict(bgcolor="rgba(0,0,0,0)")
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
     secao("Produtos por Closer × Ano")
     if "ano_criacao" in fechados.columns:
@@ -493,7 +493,7 @@ def modulo_produtos(df: pd.DataFrame):
         exploded2 = exploded2.explode("produto_list")
         exploded2["produto_list"] = exploded2["produto_list"].str.strip()
         pivot = exploded2.groupby([COL_CLOSER, "ano_criacao", "produto_list"]).size().unstack(fill_value=0)
-        st.dataframe(pivot, use_container_width=True)
+        st.dataframe(pivot, width="stretch")
 
 
 # ─────────────────────────────────────────────
@@ -509,7 +509,7 @@ def modulo_perfil(df: pd.DataFrame):
             Reunioes=("is_reuniao", "sum"),
             Fechados=("is_fechado", "sum"),
         ).reset_index()
-        grp["Conv R→F (%)"] = (grp["Fechados"] / grp["Reunioes"].replace(0, pd.NA) * 100).round(1).fillna(0)
+        grp["Conv R→F (%)"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1)
         grp["Conv L→F (%)"] = (grp["Fechados"] / grp["Leads"] * 100).round(1)
         return grp.rename(columns={col: label})
 
@@ -518,7 +518,7 @@ def modulo_perfil(df: pd.DataFrame):
     with aba1:
         secao("Carteira de Imóveis × Conversão")
         tb = conv_table(COL_CARTEIRA, "Carteira de Imóveis")
-        st.dataframe(tb, hide_index=True, use_container_width=True)
+        st.dataframe(tb, hide_index=True, width="stretch")
 
         fig = px.bar(tb, x="Carteira de Imóveis", y=["Reunioes", "Fechados"],
                      barmode="group", color_discrete_sequence=COLORS[:2])
@@ -528,12 +528,12 @@ def modulo_perfil(df: pd.DataFrame):
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
         fig.update_xaxes(tickangle=30)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with aba2:
         secao("Contratos de Locação × Conversão")
         tb2 = conv_table(COL_CONTRATOS, "Contratos de Locação")
-        st.dataframe(tb2, hide_index=True, use_container_width=True)
+        st.dataframe(tb2, hide_index=True, width="stretch")
 
         fig2 = px.bar(tb2, x="Contratos de Locação", y=["Reunioes", "Fechados"],
                       barmode="group", color_discrete_sequence=COLORS[:2])
@@ -543,12 +543,12 @@ def modulo_perfil(df: pd.DataFrame):
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
         fig2.update_xaxes(tickangle=30)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     with aba3:
         secao("Lead com Jornada × Conversão")
         tb3 = conv_table(COL_JORNADA, "Jornada")
-        st.dataframe(tb3, hide_index=True, use_container_width=True)
+        st.dataframe(tb3, hide_index=True, width="stretch")
 
         fig3 = px.bar(tb3, x="Jornada", y=["Leads", "Reunioes", "Fechados"],
                       barmode="group", color_discrete_sequence=COLORS[:3])
@@ -557,12 +557,12 @@ def modulo_perfil(df: pd.DataFrame):
             font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
 
     with aba4:
         secao("Tipo de Lead × Conversão")
         tb4 = conv_table(COL_TIPO, "Tipo de Lead")
-        st.dataframe(tb4, hide_index=True, use_container_width=True)
+        st.dataframe(tb4, hide_index=True, width="stretch")
 
         fig4 = px.bar(tb4, x="Tipo de Lead", y=["Leads", "Reunioes", "Fechados"],
                       barmode="group", color_discrete_sequence=COLORS[:3])
@@ -571,7 +571,7 @@ def modulo_perfil(df: pd.DataFrame):
             font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width="stretch")
 
 
 # ─────────────────────────────────────────────
@@ -601,9 +601,9 @@ def render_aba_comparacao(dff, col_mes, dimensao_col, dimensao_label, titulo):
         font_color="#EAEAEA", height=380, xaxis_title="Mês", yaxis_title="Fechados",
         margin=dict(l=0, r=0, t=10, b=0), legend=dict(bgcolor="rgba(0,0,0,0)")
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.caption("Tabela pivot — Fechados por mês")
-    st.dataframe(pivot, use_container_width=True)
+    st.dataframe(pivot, width="stretch")
 
 
 def modulo_comparacao(df: pd.DataFrame):
@@ -629,7 +629,7 @@ def modulo_comparacao(df: pd.DataFrame):
             Reunioes=("is_reuniao", "sum"),
             Fechados=("is_fechado", "sum"),
         ).reset_index().sort_values(col_mes)
-        grp["Conv%"] = (grp["Fechados"] / grp["Reunioes"].replace(0, pd.NA) * 100).round(1).fillna(0)
+        grp["Conv%"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1)
 
         fig = go.Figure()
         fig.add_trace(go.Bar(name="Leads", x=grp[col_mes], y=grp["Leads"], marker_color=COLORS[0]))
@@ -640,8 +640,8 @@ def modulo_comparacao(df: pd.DataFrame):
             font_color="#EAEAEA", height=380, margin=dict(l=0, r=0, t=10, b=0),
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(grp.rename(columns={col_mes: "Mês"}), hide_index=True, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
+        st.dataframe(grp.rename(columns={col_mes: "Mês"}), hide_index=True, width="stretch")
 
     with aba_closer:
         render_aba_comparacao(dff, col_mes, COL_CLOSER, "Closer", "Fechados por Mês × Closer")
@@ -693,8 +693,8 @@ def modulo_perdidos(df: pd.DataFrame):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(motivos, hide_index=True, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
+        st.dataframe(motivos, hide_index=True, width="stretch")
 
     with col_b:
         secao("Perdidos por Closer")
@@ -706,7 +706,7 @@ def modulo_perdidos(df: pd.DataFrame):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     secao("Origem × Motivo de Perda")
     cross = perdidos.groupby([COL_ORIGEM, COL_MOTIVO_PERDA]).size().reset_index(name="Qtd")
@@ -718,14 +718,14 @@ def modulo_perdidos(df: pd.DataFrame):
         font_color="#EAEAEA", height=460, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0),
         legend=dict(bgcolor="rgba(0,0,0,0)")
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
     secao("Auditoria Individual")
     closer_audit = st.selectbox("Filtrar Closer", ["Todos"] + sorted(perdidos[COL_CLOSER].dropna().unique().tolist()))
     df_audit = perdidos if closer_audit == "Todos" else perdidos[perdidos[COL_CLOSER] == closer_audit]
     cols_show = [COL_NOME, COL_CLOSER, COL_REUNIAO, COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA, COL_ORIGEM]
     cols_show = [c for c in cols_show if c in df_audit.columns]
-    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, use_container_width=True)
+    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, width="stretch")
 
 
 # ─────────────────────────────────────────────
