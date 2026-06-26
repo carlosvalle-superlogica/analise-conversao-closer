@@ -21,7 +21,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container {
-    padding-top: 1.5rem !important; padding-bottom: 25rem !important;
+    padding-top: 1.5rem !important; padding-bottom: 50rem !important;
     padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
@@ -183,7 +183,7 @@ with st.sidebar:
 # Retorna 4 datasets independentes por data.
 # ─────────────────────────────────────────────
 def render_filtros(df: pd.DataFrame):
-    with st.expander("Filtros Globais", expanded=True):
+    with st.expander("Filtros Globais", expanded=False):
 
         def date_range(col, label, key):
             datas = df[col].dropna()
