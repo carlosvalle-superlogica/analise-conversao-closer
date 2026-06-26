@@ -21,7 +21,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container {
-    padding-top: 1.5rem !important; padding-bottom: 10rem !important;
+    padding-top: 1.5rem !important; padding-bottom: 25rem !important;
     padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
@@ -606,7 +606,7 @@ def modulo_comparacao(df: pd.DataFrame):
             tabela["Fechados"] / tabela["Reuniões"].replace(0, float("nan")) * 100,
             errors="coerce").fillna(0).round(1).astype(str) + "%"
         st.dataframe(tabela, hide_index=True, width='stretch')
-        st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
+
 
     with aba_closer:
         secao("Fechados por Mês × Closer")
