@@ -575,39 +575,38 @@ def modulo_perfil(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_comparacao(df: pd.DataFrame):
     st.title("📈 Comparação Mês a Mês")
-    df_leads, df_reunioes, df_fechados, _ = render_filtros(df)
+    _, df_reunioes, df_fechados, _ = render_filtros(df)
 
     aba_geral, aba_closer, aba_jornada, aba_tipo = st.tabs(
         ["Visão Geral", "Por Closer", "Por Jornada", "Por Tipo de Lead"]
     )
 
     with aba_geral:
-        secao("Leads, Reuniões e Fechados por Mês")
-        gL = df_leads.groupby("mes_criacao_dt").size().reset_index(name="Leads")
+        secao("Reuniões e Fechados por Mês")
         gR = df_reunioes.groupby("mes_reuniao_dt").size().reset_index(name="Reuniões")
         gF = df_fechados.groupby("mes_fechamento_dt").size().reset_index(name="Fechados")
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(name="Leads",    x=gL["mes_criacao_dt"],    y=gL["Leads"],    marker_color=COLORS[0]))
         fig.add_trace(go.Bar(name="Reuniões", x=gR["mes_reuniao_dt"],    y=gR["Reuniões"], marker_color=COLORS[1]))
         fig.add_trace(go.Bar(name="Fechados", x=gF["mes_fechamento_dt"], y=gF["Fechados"], marker_color=COLORS[2]))
         fig.update_layout(
             barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
+            font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=40),
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
         st.plotly_chart(fig, width='stretch')
 
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.caption("Leads por mês de criação")
-            st.dataframe(gL.rename(columns={"mes_criacao_dt": "Mês"}), hide_index=True, width='stretch')
-        with col_b:
-            st.caption("Reuniões por mês")
-            st.dataframe(gR.rename(columns={"mes_reuniao_dt": "Mês"}), hide_index=True, width='stretch')
-        with col_c:
-            st.caption("Fechados por mês")
-            st.dataframe(gF.rename(columns={"mes_fechamento_dt": "Mês"}), hide_index=True, width='stretch')
+        # Tabela unificada: Mês | Reuniões | Fechados | Conv%
+        tabela = gR.rename(columns={"mes_reuniao_dt": "Mês"}).merge(
+            gF.rename(columns={"mes_fechamento_dt": "Mês"}), on="Mês", how="outer"
+        ).fillna(0).sort_values("Mês")
+        tabela["Reuniões"] = tabela["Reuniões"].astype(int)
+        tabela["Fechados"] = tabela["Fechados"].astype(int)
+        tabela["Conv R→F"] = pd.to_numeric(
+            tabela["Fechados"] / tabela["Reuniões"].replace(0, float("nan")) * 100,
+            errors="coerce").fillna(0).round(1).astype(str) + "%"
+        st.dataframe(tabela, hide_index=True, width='stretch')
+        st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
 
     with aba_closer:
         secao("Fechados por Mês × Closer")
