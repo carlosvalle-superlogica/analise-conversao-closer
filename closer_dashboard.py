@@ -776,6 +776,9 @@ def modulo_receita(df: pd.DataFrame):
             st.plotly_chart(fig_m, width='stretch')
 
     # ── Helper: tabela Receita + Contratos + Ticket Médio por dimensão ───────
+    def fmt_brl(val):
+        return f"R$ {int(val):,}".replace(",", ".")
+
     def dim_table(col, label):
         grp = dff.groupby(col).agg(
             Receita=(COL_VALOR, "sum"),
@@ -783,26 +786,29 @@ def modulo_receita(df: pd.DataFrame):
         ).reset_index().sort_values("Receita", ascending=False)
         grp["Ticket Médio"] = pd.to_numeric(
             grp["Receita"] / grp["Contratos"].replace(0, float("nan")),
-            errors="coerce").fillna(0).round(0).astype(int)
-        grp["Receita"]      = grp["Receita"].round(0).astype(int)
+            errors="coerce").fillna(0).round(0)
+        grp["Receita_num"]  = grp["Receita"].round(0)   # keep numeric for chart
+        grp["Receita"]      = grp["Receita_num"].apply(fmt_brl)
+        grp["Ticket Médio"] = grp["Ticket Médio"].apply(fmt_brl)
         return grp.rename(columns={col: label})
 
     def render_dim(col, label, color_idx=2):
         tb = dim_table(col, label)
         col_a, col_b = st.columns([1, 1.4])
         with col_a:
-            st.dataframe(tb, hide_index=True, width='stretch',
+            cols_disp = [c for c in tb.columns if c != "Receita_num"]
+            st.dataframe(tb[cols_disp], hide_index=True, width="stretch",
                          height=min(len(tb) * 38 + 50, 800))
         with col_b:
-            fig = px.bar(tb.head(15), x=label, y="Receita",
-                         color_discrete_sequence=[COLORS[color_idx]], text="Receita")
+            fig = px.bar(tb.head(15), x=label, y="Receita_num",
+                         color_discrete_sequence=[COLORS[color_idx]], text="Receita_num")
             fig.update_traces(texttemplate="R$ %{text:,.0f}", textposition="outside")
             fig.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=30, b=0),
                 yaxis_title="Receita (R$)", xaxis_title="")
             fig.update_xaxes(tickangle=30)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, width="stretch")
 
     # ── Por Closer ───────────────────────────────────────────────────────────
     secao("Por Closer")
@@ -822,16 +828,19 @@ def modulo_receita(df: pd.DataFrame):
         ).reset_index().sort_values("Receita", ascending=False)
         grp_prod["Ticket Médio"] = pd.to_numeric(
             grp_prod["Receita"] / grp_prod["Contratos"].replace(0, float("nan")),
-            errors="coerce").fillna(0).round(0).astype(int)
-        grp_prod["Receita"] = grp_prod["Receita"].round(0).astype(int)
+            errors="coerce").fillna(0).round(0)
+        grp_prod["Receita_num"]  = grp_prod["Receita"].round(0)
+        grp_prod["Receita"]      = grp_prod["Receita_num"].apply(fmt_brl)
+        grp_prod["Ticket Médio"] = grp_prod["Ticket Médio"].apply(fmt_brl)
         grp_prod = grp_prod.rename(columns={"produto_list": "Produto"})
         col_a, col_b = st.columns([1, 1.4])
         with col_a:
-            st.dataframe(grp_prod, hide_index=True, width='stretch',
+            cols_disp = [c for c in grp_prod.columns if c != "Receita_num"]
+            st.dataframe(grp_prod[cols_disp], hide_index=True, width="stretch",
                          height=min(len(grp_prod) * 38 + 50, 800))
         with col_b:
-            fig_p = px.bar(grp_prod.head(15), x="Produto", y="Receita",
-                           color_discrete_sequence=[COLORS[2]], text="Receita")
+            fig_p = px.bar(grp_prod.head(15), x="Produto", y="Receita_num",
+                           color_discrete_sequence=[COLORS[2]], text="Receita_num")
             fig_p.update_traces(texttemplate="R$ %{text:,.0f}", textposition="outside")
             fig_p.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
