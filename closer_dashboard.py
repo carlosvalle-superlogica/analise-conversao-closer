@@ -128,6 +128,7 @@ COL_REUNIAO       = "[IS/Closer] Reunião Ocorrida "   # note trailing space
 COL_FECHAMENTO    = 'Date entered "Fechado ([Comercial] Aquisições)"'  # mF — persiste mesmo se avançar para Pago
 COL_PAGO          = 'Date entered "Pago ([Comercial] Aquisições)"'
 COL_FECHAMENTO_FALLBACK = "Data de fechamento"  # fallback se coluna nova não vier no CSV
+COL_DATA_FECH_NATIVO    = "Data de fechamento"  # usada para is_fechado (alinha com HubSpot)
 COL_PRODUTOS      = "[IS/Closer] Produtos Fechados"
 COL_JORNADA       = "[IS] Lead com Jornada:"
 COL_TIPO          = "[IS] Tipo de lead"
@@ -185,14 +186,16 @@ def load_data(path: str) -> pd.DataFrame:
     if COL_FECHAMENTO in df.columns:
         df["mes_fechamento"]    = df[COL_FECHAMENTO].dt.to_period("M")
         df["mes_fechamento_dt"] = df[COL_FECHAMENTO].dt.strftime("%Y-%m")
+    # mes_fechamento_nativo: usa "Data de fechamento" para alinhar com filtro HubSpot
+    if COL_DATA_FECH_NATIVO in df.columns:
+        df["mes_fechamento_nativo"] = df[COL_DATA_FECH_NATIVO].dt.strftime("%Y-%m")
     if COL_PAGO in df.columns:
         df["mes_pago_dt"] = df[COL_PAGO].dt.strftime("%Y-%m")
 
     # Flag fechado
-    # is_fechado = teve Date entered Fechado preenchido (independente da etapa atual)
-    # Isso alinha com o HubSpot que conta deals que PASSARAM por Fechado,
-    # mesmo que depois tenham sido reabertos ou perdidos
-    df["is_fechado"]  = df[COL_FECHAMENTO].notna()
+    # is_fechado = Etapa Fechado/Pago + Data de fechamento preenchida
+    # Mesma lógica do HubSpot: Etapa é Fechado ou Pago + Data de fechamento é este ano
+    df["is_fechado"]  = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_DATA_FECH_NATIVO].notna()
     df["is_reuniao"]  = df[COL_REUNIAO].notna()
     df["is_perdido"]  = df[COL_ETAPA] == "Perdidos"
 
