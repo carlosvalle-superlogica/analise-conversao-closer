@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -16,71 +15,28 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────
-# CSS
-# ─────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-
-/* Espaco geral */
 .block-container {
-    padding-top: 2rem !important;
-    padding-bottom: 4rem !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
+    padding-top: 2rem !important; padding-bottom: 4rem !important;
+    padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
-
 .metric-card {
     background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
-    border: 1px solid #2D2D4E;
-    border-radius: 12px;
-    padding: 20px 24px;
-    text-align: center;
-    margin-bottom: 12px;
+    border: 1px solid #2D2D4E; border-radius: 12px;
+    padding: 20px 24px; text-align: center; margin-bottom: 12px;
 }
 .metric-card .label { font-size: 12px; color: #8888AA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
 .metric-card .value { font-size: 28px; font-weight: 700; color: #EAEAEA; }
 .metric-card .sub   { font-size: 13px; color: #6C3FC5; margin-top: 4px; }
-
 .section-title {
     font-size: 18px; font-weight: 600; color: #EAEAEA;
-    border-left: 4px solid #6C3FC5;
-    padding-left: 12px; margin: 32px 0 16px 0;
+    border-left: 4px solid #6C3FC5; padding-left: 12px; margin: 32px 0 16px 0;
 }
-
-.badge-ok   { background:#1a3a2a; color:#4CAF50; border-radius:6px; padding:2px 8px; font-size:12px; }
-.badge-warn { background:#3a2a1a; color:#FF9800; border-radius:6px; padding:2px 8px; font-size:12px; }
-.badge-bad  { background:#3a1a1a; color:#F44336; border-radius:6px; padding:2px 8px; font-size:12px; }
-
 div[data-testid="stSidebar"] { background:#0D0D1A; }
-
-/* Mobile */
-@media (max-width: 768px) {
-    .block-container {
-        padding-left: 0.75rem !important;
-        padding-right: 0.75rem !important;
-        padding-top: 1rem !important;
-        padding-bottom: 3rem !important;
-    }
-    .metric-card .value { font-size: 22px; }
-    .metric-card .label { font-size: 11px; }
-    .metric-card { padding: 14px 16px; }
-    .section-title { font-size: 15px; margin: 20px 0 12px 0; }
-    [data-testid="column"] {
-        width: 100% !important;
-        flex: 1 1 100% !important;
-        min-width: 100% !important;
-    }
-    [data-testid="stDataFrame"] { overflow-x: auto !important; }
-    div[data-testid="stSidebar"] { width: 85vw !important; }
-}
-@media (max-width: 480px) {
-    .metric-card .value { font-size: 18px; }
-    h1 { font-size: 20px !important; }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -88,7 +44,7 @@ div[data-testid="stSidebar"] { background:#0D0D1A; }
 # AUTENTICAÇÃO
 # ─────────────────────────────────────────────
 USERS = {
-    "aquisições": {"password": "2024", "role": "master"},
+    "aquisições": {"password": "2024",     "role": "master"},
     "operador":   {"password": "vis@2025", "role": "operador"},
 }
 
@@ -99,7 +55,7 @@ def login_screen():
     with col:
         user = st.text_input("Usuário")
         pwd  = st.text_input("Senha", type="password")
-        if st.button("Entrar", width="stretch"):
+        if st.button("Entrar", use_container_width=True):
             if user in USERS and USERS[user]["password"] == pwd:
                 st.session_state["logged_in"] = True
                 st.session_state["user"]      = user
@@ -116,32 +72,32 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # ─────────────────────────────────────────────
-# MAPEAMENTO DE COLUNAS (nomes reais do CSV)
+# MAPEAMENTO DE COLUNAS
 # ─────────────────────────────────────────────
-COL_ID            = "ID do registro."
-COL_NOME          = "Nome do negócio"
-COL_CLOSER        = "[IS/SDR] Closer Responsável"
-COL_SDR           = "[IS/SDR] SDR Responsável"
-COL_ETAPA         = "Etapa do negócio"
-COL_CRIACAO       = "Data de criação"
-COL_REUNIAO       = "[IS/Closer] Reunião Ocorrida "   # note trailing space
-COL_FECHAMENTO    = 'Date entered "Fechado ([Comercial] Aquisições)"'  # mF — persiste mesmo se avançar para Pago
-COL_PAGO          = 'Date entered "Pago ([Comercial] Aquisições)"'
-COL_FECHAMENTO_FALLBACK = "Data de fechamento"  # fallback se coluna nova não vier no CSV
-COL_DATA_FECH_NATIVO    = "Data de fechamento"  # usada para is_fechado (alinha com HubSpot)
-COL_PRODUTOS      = "[IS/Closer] Produtos Fechados"
-COL_JORNADA       = "[IS] Lead com Jornada:"
-COL_TIPO          = "[IS] Tipo de lead"
-COL_ORIGEM        = "[IS] Origem do lead"
-COL_CARTEIRA      = "[IS] Carteira de Imóveis (novo)"
-COL_CONTRATOS     = "[IS] Contratos de Locação"
-COL_MOTIVO_PERDA  = "Motivo de Fechamento Perdido"
-COL_SUBMOTIVO     = "Motivo de Fechamento Perdido (Sub-motivo)"
-COL_DESC_PERDA    = "Descrição de fechamento perdido"
-COL_ERP           = "[IS/SDR] Qual ERP utiliza?"
-COL_CRM_USO       = "[IS/SDR] Qual CRM utiliza?"
+COL_ID           = "ID do registro."
+COL_NOME         = "Nome do negócio"
+COL_CLOSER       = "[IS/SDR] Closer Responsável"
+COL_SDR          = "[IS/SDR] SDR Responsável"
+COL_ETAPA        = "Etapa do negócio"
+COL_CRIACAO      = "Data de criação"
+COL_REUNIAO      = "[IS/Closer] Reunião Ocorrida"
+COL_FECHAMENTO   = 'Date entered "Fechado ([Comercial] Aquisições)"'
+COL_PAGO         = 'Date entered "Pago ([Comercial] Aquisições)"'
+COL_DATA_FECH    = "Data de fechamento"   # coluna nativa — usada como mF
+COL_PRODUTOS     = "[IS/Closer] Produtos Fechados"
+COL_JORNADA      = "[IS] Lead com Jornada:"
+COL_TIPO         = "[IS] Tipo de lead"
+COL_ORIGEM       = "[IS] Origem do lead"
+COL_CARTEIRA     = "[IS] Carteira de Imóveis (novo)"
+COL_CONTRATOS    = "[IS] Contratos de Locação"
+COL_MOTIVO_PERDA = "Motivo de Fechamento Perdido"
+COL_SUBMOTIVO    = "Motivo de Fechamento Perdido (Sub-motivo)"
+COL_DESC_PERDA   = "Descrição de fechamento perdido"
+COL_ERP          = "[IS/SDR] Qual ERP utiliza?"
+COL_CRM_USO      = "[IS/SDR] Qual CRM utiliza?"
 
 ETAPAS_FECHADO = ["Fechado", "Pago"]
+
 
 # ─────────────────────────────────────────────
 # CARGA DE DADOS
@@ -149,64 +105,27 @@ ETAPAS_FECHADO = ["Fechado", "Pago"]
 @st.cache_data(show_spinner="Carregando dados…")
 def load_data(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, low_memory=False)
-
-    # Normaliza espaços nos nomes de colunas
     df.columns = df.columns.str.strip()
 
-    # Remapeia nomes com trailing space
-    rename = {}
-    for c in df.columns:
-        stripped = c.strip()
-        if stripped != c:
-            rename[c] = stripped
-    if rename:
-        df = df.rename(columns=rename)
-
-    # Reatribui constantes após strip
-    global COL_REUNIAO
-    COL_REUNIAO = "[IS/Closer] Reunião Ocorrida"
-
-    # Garante COL_FECHAMENTO: usa Date entered Fechado; se ausente, cai para Data de fechamento
-    if COL_FECHAMENTO not in df.columns and COL_FECHAMENTO_FALLBACK in df.columns:
-        df[COL_FECHAMENTO] = df[COL_FECHAMENTO_FALLBACK]
-
-    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH_NATIVO]
+    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Colunas derivadas de mês
-    if COL_CRIACAO in df.columns:
-        df["mes_criacao"]    = df[COL_CRIACAO].dt.to_period("M")
-        df["ano_criacao"]    = df[COL_CRIACAO].dt.year
-        df["mes_criacao_dt"] = df[COL_CRIACAO].dt.strftime("%Y-%m")
-    if COL_REUNIAO in df.columns:
-        df["mes_reuniao"]    = df[COL_REUNIAO].dt.to_period("M")
-        df["mes_reuniao_dt"] = df[COL_REUNIAO].dt.strftime("%Y-%m")
-    if COL_FECHAMENTO in df.columns:
-        df["mes_fechamento"]    = df[COL_FECHAMENTO].dt.to_period("M")
-        df["mes_fechamento_dt"] = df[COL_FECHAMENTO].dt.strftime("%Y-%m")
-    # mes_fechamento_nativo: usa "Data de fechamento" para alinhar com filtro HubSpot
-    if COL_DATA_FECH_NATIVO in df.columns:
-        df["mes_fechamento_nativo"] = df[COL_DATA_FECH_NATIVO].dt.strftime("%Y-%m")
-    if COL_PAGO in df.columns:
-        df["mes_pago_dt"] = df[COL_PAGO].dt.strftime("%Y-%m")
+    # Flags base (sem filtro de data)
+    df["is_fechado"] = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_DATA_FECH].notna()
+    df["is_reuniao"] = df[COL_REUNIAO].notna()
+    df["is_perdido"] = df[COL_ETAPA] == "Perdidos"
 
-    # Flag fechado
-    # is_fechado = Etapa Fechado/Pago + Data de fechamento preenchida
-    # Mesma lógica do HubSpot: Etapa é Fechado ou Pago + Data de fechamento é este ano
-    df["is_fechado"]  = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_DATA_FECH_NATIVO].notna()
-    df["is_reuniao"]  = df[COL_REUNIAO].notna()
-    df["is_perdido"]  = df[COL_ETAPA] == "Perdidos"
+    if COL_CRIACAO in df.columns:
+        df["ano_criacao"]     = df[COL_CRIACAO].dt.year
+        df["mes_criacao_dt"]  = df[COL_CRIACAO].dt.strftime("%Y-%m")
+    if COL_REUNIAO in df.columns:
+        df["mes_reuniao_dt"]  = df[COL_REUNIAO].dt.strftime("%Y-%m")
+    if COL_DATA_FECH in df.columns:
+        df["mes_fechamento_dt"] = df[COL_DATA_FECH].dt.strftime("%Y-%m")
 
     return df
-
-
-def get_df():
-    if "df" not in st.session_state:
-        st.warning("Faça upload do CSV para continuar.")
-        st.stop()
-    return st.session_state["df"]
 
 
 # ─────────────────────────────────────────────
@@ -216,7 +135,7 @@ with st.sidebar:
     st.markdown("### 📂 Dados")
     uploaded = st.file_uploader("Upload CSV (HubSpot)", type=["csv"])
     if uploaded:
-        import tempfile, os
+        import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
             tmp.write(uploaded.read())
             tmp_path = tmp.name
@@ -235,7 +154,7 @@ with st.sidebar:
         "❌ Perdidos (pós-reunião)",
     ]
     if st.session_state.get("role") == "operador":
-        modulos = [m for m in modulos if m not in ["🏆 Performance de Closers"]]
+        modulos = [m for m in modulos if m != "🏆 Performance de Closers"]
 
     modulo = st.radio("Módulo", modulos, label_visibility="collapsed")
 
@@ -248,35 +167,40 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────
-# FILTROS GLOBAIS
+# FILTROS GLOBAIS — retorna 3 datasets separados
+#
+# LÓGICA CORRETA:
+#   df_leads    = filtros dimensionais aplicados sobre df, sem filtro de data
+#                 → contagem de leads usa mL (data de criação)
+#   df_reunioes = filtros dimensionais aplicados sobre df[is_reuniao], filtrado por mR
+#   df_fechados = filtros dimensionais aplicados sobre df[is_fechado],  filtrado por mF
+#
+# Cada KPI lê do seu próprio dataset — sem mistura de datas.
 # ─────────────────────────────────────────────
 def render_filtros(df: pd.DataFrame):
     with st.expander("🔍 Filtros Globais", expanded=True):
 
-        # ── Linha 1: Datas independentes ────────────────────────────────────
+        # ── Linha 1: Períodos independentes ────────────────────────────────
         st.markdown("##### 📅 Períodos (cada métrica usa sua própria data)")
         c1, c2, c3 = st.columns(3)
 
         def date_range(col, label, key):
-            """Retorna (data_ini, data_fim) para uma coluna de data."""
             datas = df[col].dropna()
             if len(datas) == 0:
                 return None, None
-            min_d, max_d = datas.min().date(), datas.max().date()
-            return st.date_input(label, value=(min_d, max_d),
-                                 min_value=min_d, max_value=max_d, key=key)
+            mn, mx = datas.min().date(), datas.max().date()
+            v = st.date_input(label, value=(mn, mx), min_value=mn, max_value=mx, key=key)
+            return (v[0], v[1]) if isinstance(v, (list, tuple)) and len(v) == 2 else (None, None)
 
         with c1:
             st.caption("🟢 Leads — Data de Criação")
-            r_criacao = date_range(COL_CRIACAO, "Período de Criação", "periodo_criacao")
-
+            r_L = date_range(COL_CRIACAO, "Período de Criação", "periodo_criacao")
         with c2:
             st.caption("🔵 Reuniões — Reunião Ocorrida")
-            r_reuniao = date_range(COL_REUNIAO, "Período de Reunião", "periodo_reuniao")
-
+            r_R = date_range(COL_REUNIAO, "Período de Reunião", "periodo_reuniao")
         with c3:
             st.caption("🟣 Fechados — Data de Fechamento")
-            r_fechamento = date_range(COL_DATA_FECH_NATIVO, "Período de Fechamento", "periodo_fechamento")
+            r_F = date_range(COL_DATA_FECH, "Período de Fechamento", "periodo_fechamento")
 
         st.markdown("---")
 
@@ -286,20 +210,17 @@ def render_filtros(df: pd.DataFrame):
         with c4:
             anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
             ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
-
             etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
 
         with c5:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
             closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
-
             sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
             sdr_sel = st.multiselect("SDR Responsável", sdrs, default=sdrs, key="sdr_sel")
 
         with c6:
             origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
             origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
-
             jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
             jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
 
@@ -316,89 +237,90 @@ def render_filtros(df: pd.DataFrame):
             produtos_todos = sorted(set(
                 p.strip()
                 for val in df[COL_PRODUTOS].dropna()
-                for p in str(val).split(";")
-                if p.strip()
+                for p in str(val).split(";") if p.strip()
             ))
             produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[],
                                          key="produto_sel", placeholder="Todos (sem filtro)")
 
         with c9:
-            def explode_valores(col):
+            def explode_vals(col):
                 return sorted(set(
                     v.strip()
                     for val in df[col].dropna()
-                    for v in str(val).split(";")
-                    if v.strip()
+                    for v in str(val).split(";") if v.strip()
                 ))
+            erp_sel = st.multiselect("ERP que utiliza", explode_vals(COL_ERP) if COL_ERP in df.columns else [],
+                                     default=[], key="erp_sel", placeholder="Todos (sem filtro)")
+            crm_sel = st.multiselect("CRM que utiliza", explode_vals(COL_CRM_USO) if COL_CRM_USO in df.columns else [],
+                                     default=[], key="crm_sel", placeholder="Todos (sem filtro)")
 
-            if COL_ERP in df.columns:
-                erp_sel = st.multiselect("ERP que utiliza", explode_valores(COL_ERP),
-                                         default=[], key="erp_sel", placeholder="Todos (sem filtro)")
-            else:
-                erp_sel = []
+    # ─────────────────────────────────────────────────────────────────────
+    # MÁSCARA DIMENSIONAL (independente de data)
+    # Aplica: closer, sdr, origem, jornada, tipo, produto, erp, crm, etapa
+    # NÃO aplica filtro de data aqui — cada sub-dataset aplica sua data
+    # ─────────────────────────────────────────────────────────────────────
+    def mask_dim(d):
+        m = pd.Series([True] * len(d), index=d.index)
+        if ano_sel:
+            m &= d["ano_criacao"].isin(ano_sel)
+        if etapa_sel != "Todas":
+            m &= d[COL_ETAPA] == etapa_sel
+        if closer_sel:
+            m &= d[COL_CLOSER].isin(closer_sel)
+        if sdr_sel:
+            m &= d[COL_SDR].isin(sdr_sel)
+        if origem_sel:
+            m &= d[COL_ORIGEM].isin(origem_sel)
+        if jornada_sel:
+            m &= d[COL_JORNADA].isin(jornada_sel)
+        if tipo_sel:
+            m &= d[COL_TIPO].isin(tipo_sel)
+        if produto_sel:
+            m &= d[COL_PRODUTOS].fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
+            )
+        if erp_sel and COL_ERP in d.columns:
+            m &= d[COL_ERP].fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in erp_sel)
+            )
+        if crm_sel and COL_CRM_USO in d.columns:
+            m &= d[COL_CRM_USO].fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
+            )
+        return m
 
-            if COL_CRM_USO in df.columns:
-                crm_sel = st.multiselect("CRM que utiliza", explode_valores(COL_CRM_USO),
-                                         default=[], key="crm_sel", placeholder="Todos (sem filtro)")
-            else:
-                crm_sel = []
+    # ── df_leads: leads criados no período mL ───────────────────────────
+    m_leads = pd.Series([True] * len(df), index=df.index)
+    if r_L[0] and r_L[1]:
+        m_leads &= df[COL_CRIACAO].dt.date.between(r_L[0], r_L[1])
+    df_leads = df[m_leads & mask_dim(df)].copy()
 
-    # ── Máscaras independentes ───────────────────────────────────────────────
-    # mL: máscara de leads — usa data de criação
-    mL = pd.Series([True] * len(df), index=df.index)
-    if r_criacao and r_criacao[0] and r_criacao[1]:
-        mL &= df[COL_CRIACAO].dt.date.between(r_criacao[0], r_criacao[1])
+    # ── df_reunioes: reuniões que ocorreram no período mR ───────────────
+    m_reun = df["is_reuniao"].copy()
+    if r_R[0] and r_R[1]:
+        m_reun &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
+    df_reunioes = df[m_reun & mask_dim(df)].copy()
 
-    # mR: máscara de reuniões — usa data da reunião ocorrida
-    mR = pd.Series([True] * len(df), index=df.index)
-    if r_reuniao and r_reuniao[0] and r_reuniao[1]:
-        mR &= df[COL_REUNIAO].dt.date.between(r_reuniao[0], r_reuniao[1])
+    # ── df_fechados: fechados cuja Data de Fechamento está no período mF ─
+    m_fech = df["is_fechado"].copy()
+    if r_F[0] and r_F[1]:
+        m_fech &= df[COL_DATA_FECH].dt.date.between(r_F[0], r_F[1])
+    # filtro de etapa aplicado aqui também: se etapa_sel == "Fechado" ou "Pago", restringe
+    if etapa_sel == "Fechado":
+        m_fech &= df[COL_ETAPA] == "Fechado"
+    elif etapa_sel == "Pago":
+        m_fech &= df[COL_ETAPA] == "Pago"
+    df_fechados = df[m_fech & mask_dim(df)].copy()
 
-    # mF: máscara de fechados — usa data de fechamento
-    mF = pd.Series([True] * len(df), index=df.index)
-    if r_fechamento and r_fechamento[0] and r_fechamento[1]:
-        mF &= df[COL_DATA_FECH_NATIVO].dt.date.between(r_fechamento[0], r_fechamento[1])
+    # ── df_perdidos: perdidos com reunião ocorrida ───────────────────────
+    m_perd = df["is_perdido"] & df["is_reuniao"]
+    # usa período de reunião para perdidos
+    if r_R[0] and r_R[1]:
+        m_perd &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
+    df_perdidos = df[m_perd & mask_dim(df)].copy()
 
-    # Máscara combinada: lead aparece se satisfaz a data relevante para cada evento
-    # Um deal é incluído se: está no período de criação OU teve reunião no período OU foi fechado no período
-    mask_data = mL | (df["is_reuniao"] & mR) | (df["is_fechado"] & mF)
+    return df_leads, df_reunioes, df_fechados, df_perdidos
 
-    # Filtros dimensionais (aplicam em todo o dataset)
-    mask = mask_data.copy()
-
-    if ano_sel:
-        mask &= df["ano_criacao"].isin(ano_sel)
-    if etapa_sel != "Todas":
-        mask &= df[COL_ETAPA] == etapa_sel
-    if closer_sel:
-        mask &= df[COL_CLOSER].isin(closer_sel)
-    if sdr_sel:
-        mask &= df[COL_SDR].isin(sdr_sel)
-    if origem_sel:
-        mask &= df[COL_ORIGEM].isin(origem_sel)
-    if jornada_sel:
-        mask &= df[COL_JORNADA].isin(jornada_sel)
-    if tipo_sel:
-        mask &= df[COL_TIPO].isin(tipo_sel)
-    if produto_sel:
-        mask &= df[COL_PRODUTOS].fillna("").apply(
-            lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
-        )
-    if erp_sel and COL_ERP in df.columns:
-        mask &= df[COL_ERP].fillna("").apply(
-            lambda x: any(p in [s.strip() for s in x.split(";")] for p in erp_sel)
-        )
-    if crm_sel and COL_CRM_USO in df.columns:
-        mask &= df[COL_CRM_USO].fillna("").apply(
-            lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
-        )
-
-    # Salva máscaras no session_state para uso nos módulos
-    st.session_state["mL"] = mL
-    st.session_state["mR"] = mR
-    st.session_state["mF"] = mF
-
-    return df[mask].copy()
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -426,25 +348,26 @@ def secao(txt):
 # ─────────────────────────────────────────────
 def modulo_geral(df: pd.DataFrame):
     st.title("📊 Dashboard Geral")
-    dff = render_filtros(df)
+    df_leads, df_reunioes, df_fechados, df_perdidos = render_filtros(df)
 
-    total_leads   = len(dff)
-    total_reuniao = dff["is_reuniao"].sum()
-    total_fechado = dff["is_fechado"].sum()
+    n_leads    = len(df_leads)
+    n_reunioes = len(df_reunioes)
+    n_fechados = len(df_fechados)
+    n_perdidos = len(df_perdidos)
 
     secao("Funil de Conversão")
+    st.caption("ℹ️ Leads = período de criação · Reuniões = período de reunião · Fechados = período de fechamento")
     c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: metric_card("Total de Leads", f"{total_leads:,}")
-    with c2: metric_card("Com Reunião", f"{total_reuniao:,}", pct(total_reuniao, total_leads))
-    with c3: metric_card("Fechados", f"{total_fechado:,}", pct(total_fechado, total_leads))
-    with c4: metric_card("Conv. Reunião→Fechado", pct(total_fechado, total_reuniao))
-    with c5: metric_card("Perdidos", f"{dff['is_perdido'].sum():,}", pct(dff['is_perdido'].sum(), total_leads))
+    with c1: metric_card("Total de Leads",        f"{n_leads:,}")
+    with c2: metric_card("Com Reunião",            f"{n_reunioes:,}", pct(n_reunioes, n_leads))
+    with c3: metric_card("Fechados",               f"{n_fechados:,}", pct(n_fechados, n_leads))
+    with c4: metric_card("Conv. Reunião→Fechado",  pct(n_fechados, n_reunioes))
+    with c5: metric_card("Perdidos (pós-reunião)", f"{n_perdidos:,}")
 
-    # Funil visual
     secao("Funil Visual")
     fig_funil = go.Figure(go.Funnel(
-        y=["Leads Totais", "Reunião Ocorrida", "Fechados"],
-        x=[total_leads, total_reuniao, total_fechado],
+        y=["Leads", "Reuniões", "Fechados"],
+        x=[n_leads, n_reunioes, n_fechados],
         marker_color=[COLORS[0], COLORS[1], COLORS[2]],
         textinfo="value+percent initial",
     ))
@@ -452,53 +375,34 @@ def modulo_geral(df: pd.DataFrame):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font_color="#EAEAEA", height=320, margin=dict(l=0, r=0, t=10, b=0)
     )
-    st.plotly_chart(fig_funil, width="stretch")
+    st.plotly_chart(fig_funil, use_container_width=True)
 
     col_a, col_b = st.columns(2)
 
     with col_a:
-        secao("Por Jornada")
-        grp = dff.groupby(COL_JORNADA).agg(
-            Leads=(COL_ID, "count"),
-            Reunioes=("is_reuniao", "sum"),
-            Fechados=("is_fechado", "sum"),
-        ).reset_index()
-        grp["Conv%"] = (grp["Fechados"] / grp["Leads"] * 100).round(1).astype(str) + "%"
-        st.dataframe(grp.rename(columns={COL_JORNADA: "Jornada"}), hide_index=True, width="stretch")
+        secao("Fechados por Jornada")
+        grp = df_fechados.groupby(COL_JORNADA).size().reset_index(name="Fechados")
+        grp = grp.sort_values("Fechados", ascending=False)
+        st.dataframe(grp.rename(columns={COL_JORNADA: "Jornada"}), hide_index=True, use_container_width=True)
 
     with col_b:
-        secao("Por Tipo de Lead")
-        grp2 = dff.groupby(COL_TIPO).agg(
-            Leads=(COL_ID, "count"),
-            Reunioes=("is_reuniao", "sum"),
-            Fechados=("is_fechado", "sum"),
-        ).reset_index()
-        grp2["Conv%"] = (grp2["Fechados"] / grp2["Leads"] * 100).round(1).astype(str) + "%"
-        grp2 = grp2.sort_values("Leads", ascending=False)
-        st.dataframe(grp2.rename(columns={COL_TIPO: "Tipo"}), hide_index=True, width="stretch")
+        secao("Fechados por Tipo de Lead")
+        grp2 = df_fechados.groupby(COL_TIPO).size().reset_index(name="Fechados")
+        grp2 = grp2.sort_values("Fechados", ascending=False)
+        st.dataframe(grp2.rename(columns={COL_TIPO: "Tipo"}), hide_index=True, use_container_width=True)
 
-    secao("Top Origens (Leads)")
-    orig = dff[COL_ORIGEM].value_counts().head(15).reset_index()
-    orig.columns = ["Origem", "Leads"]
-    fig_orig = px.bar(orig, x="Leads", y="Origem", orientation="h",
-                      color_discrete_sequence=[PURPLE])
-    fig_orig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#EAEAEA", height=420, yaxis_title="", xaxis_title="Leads",
-        margin=dict(l=0, r=0, t=10, b=0)
-    )
-    st.plotly_chart(fig_orig, width="stretch")
-
-    secao("Performance por Closer (Funil)")
-    perf = dff.groupby(COL_CLOSER).agg(
-        Leads=(COL_ID, "count"),
-        Reunioes=("is_reuniao", "sum"),
-        Fechados=("is_fechado", "sum"),
-    ).reset_index()
-    perf["Conv L→F"] = (perf["Fechados"] / perf["Leads"] * 100).round(1).astype(str) + "%"
-    perf["Conv R→F"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
+    secao("Performance por Closer")
+    perf_leads = df_leads.groupby(COL_CLOSER).size().reset_index(name="Leads")
+    perf_reun  = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
+    perf_fech  = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf = perf_leads.merge(perf_reun, on=COL_CLOSER, how="outer") \
+                     .merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
+    perf["Leads"]    = perf["Leads"].astype(int)
+    perf["Reuniões"] = perf["Reuniões"].astype(int)
+    perf["Fechados"] = perf["Fechados"].astype(int)
+    perf["Conv R→F"] = (perf["Fechados"] / perf["Reuniões"].where(perf["Reuniões"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
     perf = perf.sort_values("Fechados", ascending=False)
-    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
+    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -506,63 +410,57 @@ def modulo_geral(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_closers(df: pd.DataFrame):
     st.title("🏆 Performance de Closers")
-    dff = render_filtros(df)
+    df_leads, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    perf = dff.groupby(COL_CLOSER).agg(
-        Leads=(COL_ID, "count"),
-        Reunioes=("is_reuniao", "sum"),
-        Fechados=("is_fechado", "sum"),
-    ).reset_index()
-    perf["_conv_rf"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1)
-    perf["_conv_lf"] = (perf["Fechados"] / perf["Leads"] * 100).round(1)
-    perf = perf.sort_values("_conv_rf", ascending=False).reset_index(drop=True)
-    perf["Conv R→F (%)"] = perf["_conv_rf"].astype(str) + "%"
-    perf["Conv L→F (%)"] = perf["_conv_lf"].astype(str) + "%"
-    perf = perf.drop(columns=["_conv_rf", "_conv_lf"])
+    perf_leads = df_leads.groupby(COL_CLOSER).size().reset_index(name="Leads")
+    perf_reun  = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
+    perf_fech  = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf = perf_leads.merge(perf_reun, on=COL_CLOSER, how="outer") \
+                     .merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
+    perf["Leads"]    = perf["Leads"].astype(int)
+    perf["Reuniões"] = perf["Reuniões"].astype(int)
+    perf["Fechados"] = perf["Fechados"].astype(int)
+    perf["_conv_rf"] = (perf["Fechados"] / perf["Reuniões"].where(perf["Reuniões"] > 0) * 100).fillna(0).round(1)
+    perf = perf.sort_values("Fechados", ascending=False).reset_index(drop=True)
+    perf["Conv R→F"] = perf["_conv_rf"].astype(str) + "%"
+    perf = perf.drop(columns=["_conv_rf"])
 
-    secao("Ranking por Conversão Reunião → Fechado")
-
-    # Top 5 / Bottom 5
+    secao("Ranking por Fechados")
     col_a, col_b = st.columns(2)
     with col_a:
-        st.markdown("##### 🥇 Top 5")
-        top5 = perf.head(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
-        # já formatado com %
-        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
+        st.markdown("##### 🥇 Top 5 em Fechados")
+        top5 = perf.head(5)[[COL_CLOSER, "Reuniões", "Fechados", "Conv R→F"]].copy()
+        st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
     with col_b:
-        st.markdown("##### ⚠️ Atenção (bottom 5 com ≥5 reuniões)")
-        bot5 = perf[perf["Reunioes"] >= 5].tail(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
-        # já formatado com %
-        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
+        st.markdown("##### ⚠️ Atenção (menor conv. c/ ≥5 reuniões)")
+        bot5 = perf[perf["Reuniões"] >= 5].sort_values("Conv R→F").head(5)[[COL_CLOSER, "Reuniões", "Fechados", "Conv R→F"]].copy()
+        st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
 
     secao("Reuniões vs Fechados por Closer")
     fig = go.Figure()
-    fig.add_trace(go.Bar(name="Reuniões", x=perf[COL_CLOSER], y=perf["Reunioes"], marker_color=COLORS[1]))
+    fig.add_trace(go.Bar(name="Reuniões", x=perf[COL_CLOSER], y=perf["Reuniões"], marker_color=COLORS[1]))
     fig.add_trace(go.Bar(name="Fechados", x=perf[COL_CLOSER], y=perf["Fechados"], marker_color=COLORS[2]))
     fig.update_layout(
         barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font_color="#EAEAEA", height=380, margin=dict(l=0, r=0, t=10, b=0),
         legend=dict(bgcolor="rgba(0,0,0,0)")
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
-    secao("Evolução Mensal por Closer")
-    if "mes_reuniao_dt" in dff.columns:
-        evo = dff[dff["is_fechado"]].groupby([COL_CLOSER, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+    secao("Evolução Mensal de Fechados por Closer")
+    if "mes_fechamento_dt" in df_fechados.columns:
+        evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
         fig2 = px.line(evo, x="mes_fechamento_dt", y="Fechados", color=COL_CLOSER,
                        color_discrete_sequence=COLORS, markers=True)
         fig2.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=380, xaxis_title="Mês", yaxis_title="Fechados",
-            margin=dict(l=0, r=0, t=10, b=0), legend_title="Closer",
-            legend=dict(bgcolor="rgba(0,0,0,0)")
+            font_color="#EAEAEA", height=380, xaxis_title="Mês de Fechamento",
+            margin=dict(l=0, r=0, t=10, b=0), legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, use_container_width=True)
 
     secao("Tabela Completa")
-    perf_disp = perf.copy()
-    # já formatado com % acima
-    st.dataframe(perf_disp.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
+    st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -570,18 +468,18 @@ def modulo_closers(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_produtos(df: pd.DataFrame):
     st.title("📦 Produtos Fechados")
-    dff = render_filtros(df)
+    _, _, df_fechados, _ = render_filtros(df)
 
-    fechados = dff[dff["is_fechado"] & dff[COL_PRODUTOS].notna()].copy()
+    fechados = df_fechados[df_fechados[COL_PRODUTOS].notna()].copy()
 
     if fechados.empty:
         st.info("Sem dados de produtos fechados para o período selecionado.")
         return
 
-    # Explode produtos (separados por ";")
     fechados["produto_list"] = fechados[COL_PRODUTOS].str.split(";")
     exploded = fechados.explode("produto_list")
     exploded["produto_list"] = exploded["produto_list"].str.strip()
+    exploded = exploded[exploded["produto_list"] != ""]
 
     secao("Mix de Vendas — Volume por Produto")
     mix = exploded["produto_list"].value_counts().reset_index()
@@ -596,33 +494,23 @@ def modulo_produtos(df: pd.DataFrame):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font_color="#EAEAEA", height=420, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
     with col_b:
-        st.dataframe(mix, hide_index=True, width="stretch")
+        st.dataframe(mix, hide_index=True, use_container_width=True)
 
     secao("Produtos por Closer")
     por_closer = exploded.groupby([COL_CLOSER, "produto_list"]).size().reset_index(name="Qtd")
-    por_closer = por_closer.sort_values([COL_CLOSER, "Qtd"], ascending=[True, False])
-
-    closer_sel2 = st.selectbox("Selecione o Closer", sorted(por_closer[COL_CLOSER].unique()))
-    df_c = por_closer[por_closer[COL_CLOSER] == closer_sel2]
-    fig2 = px.pie(df_c, names="produto_list", values="Qtd",
-                  color_discrete_sequence=COLORS, hole=0.4)
-    fig2.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", font_color="#EAEAEA",
-        height=380, margin=dict(l=0, r=0, t=10, b=0),
-        legend=dict(bgcolor="rgba(0,0,0,0)")
-    )
-    st.plotly_chart(fig2, width="stretch")
-
-    secao("Produtos por Closer × Ano")
-    if "ano_criacao" in fechados.columns:
-        exploded2 = fechados.copy()
-        exploded2["produto_list"] = exploded2[COL_PRODUTOS].str.split(";")
-        exploded2 = exploded2.explode("produto_list")
-        exploded2["produto_list"] = exploded2["produto_list"].str.strip()
-        pivot = exploded2.groupby([COL_CLOSER, "ano_criacao", "produto_list"]).size().unstack(fill_value=0)
-        st.dataframe(pivot, width="stretch")
+    closer_opts = sorted(por_closer[COL_CLOSER].unique())
+    if closer_opts:
+        closer_sel2 = st.selectbox("Selecione o Closer", closer_opts)
+        df_c = por_closer[por_closer[COL_CLOSER] == closer_sel2]
+        fig2 = px.pie(df_c, names="produto_list", values="Qtd",
+                      color_discrete_sequence=COLORS, hole=0.4)
+        fig2.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", font_color="#EAEAEA",
+            height=380, margin=dict(l=0, r=0, t=10, b=0), legend=dict(bgcolor="rgba(0,0,0,0)")
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -630,167 +518,134 @@ def modulo_produtos(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_perfil(df: pd.DataFrame):
     st.title("🧩 Perfil do Lead")
-    dff = render_filtros(df)
+    _, _, df_fechados, _ = render_filtros(df)
+
+    st.caption("Perfil baseado nos leads Fechados no período de fechamento selecionado.")
 
     def conv_table(col, label):
-        grp = dff.groupby(col).agg(
-            Leads=(COL_ID, "count"),
-            Reunioes=("is_reuniao", "sum"),
-            Fechados=("is_fechado", "sum"),
-        ).reset_index()
-        grp["Conv R→F (%)"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
-        grp["Conv L→F (%)"] = (grp["Fechados"] / grp["Leads"] * 100).round(1).astype(str) + "%"
+        grp = df_fechados.groupby(col).size().reset_index(name="Fechados")
+        grp = grp.sort_values("Fechados", ascending=False)
         return grp.rename(columns={col: label})
 
     aba1, aba2, aba3, aba4 = st.tabs(["🏠 Carteira de Imóveis", "📄 Contratos", "🧭 Jornada", "🔖 Tipo de Lead"])
 
     with aba1:
-        secao("Carteira de Imóveis × Conversão")
+        secao("Carteira de Imóveis nos Fechados")
         tb = conv_table(COL_CARTEIRA, "Carteira de Imóveis")
-        st.dataframe(tb, hide_index=True, width="stretch")
-
-        fig = px.bar(tb, x="Carteira de Imóveis", y=["Reunioes", "Fechados"],
-                     barmode="group", color_discrete_sequence=COLORS[:2])
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
-            legend=dict(bgcolor="rgba(0,0,0,0)")
-        )
+        st.dataframe(tb, hide_index=True, use_container_width=True)
+        fig = px.bar(tb, x="Carteira de Imóveis", y="Fechados", color_discrete_sequence=[PURPLE])
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
         fig.update_xaxes(tickangle=30)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     with aba2:
-        secao("Contratos de Locação × Conversão")
+        secao("Contratos de Locação nos Fechados")
         tb2 = conv_table(COL_CONTRATOS, "Contratos de Locação")
-        st.dataframe(tb2, hide_index=True, width="stretch")
-
-        fig2 = px.bar(tb2, x="Contratos de Locação", y=["Reunioes", "Fechados"],
-                      barmode="group", color_discrete_sequence=COLORS[:2])
-        fig2.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
-            legend=dict(bgcolor="rgba(0,0,0,0)")
-        )
+        st.dataframe(tb2, hide_index=True, use_container_width=True)
+        fig2 = px.bar(tb2, x="Contratos de Locação", y="Fechados", color_discrete_sequence=[COLORS[1]])
+        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
         fig2.update_xaxes(tickangle=30)
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, use_container_width=True)
 
     with aba3:
-        secao("Lead com Jornada × Conversão")
+        secao("Jornada nos Fechados")
         tb3 = conv_table(COL_JORNADA, "Jornada")
-        st.dataframe(tb3, hide_index=True, width="stretch")
-
-        fig3 = px.bar(tb3, x="Jornada", y=["Leads", "Reunioes", "Fechados"],
-                      barmode="group", color_discrete_sequence=COLORS[:3])
-        fig3.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
-            legend=dict(bgcolor="rgba(0,0,0,0)")
-        )
-        st.plotly_chart(fig3, width="stretch")
+        st.dataframe(tb3, hide_index=True, use_container_width=True)
+        fig3 = px.bar(tb3, x="Jornada", y="Fechados", color_discrete_sequence=[COLORS[2]])
+        fig3.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig3, use_container_width=True)
 
     with aba4:
-        secao("Tipo de Lead × Conversão")
+        secao("Tipo de Lead nos Fechados")
         tb4 = conv_table(COL_TIPO, "Tipo de Lead")
-        st.dataframe(tb4, hide_index=True, width="stretch")
-
-        fig4 = px.bar(tb4, x="Tipo de Lead", y=["Leads", "Reunioes", "Fechados"],
-                      barmode="group", color_discrete_sequence=COLORS[:3])
-        fig4.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0),
-            legend=dict(bgcolor="rgba(0,0,0,0)")
-        )
-        st.plotly_chart(fig4, width="stretch")
+        st.dataframe(tb4, hide_index=True, use_container_width=True)
+        fig4 = px.bar(tb4, x="Tipo de Lead", y="Fechados", color_discrete_sequence=[COLORS[3]])
+        fig4.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
+        fig4.update_xaxes(tickangle=30)
+        st.plotly_chart(fig4, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
 # MÓDULO 5: COMPARAÇÃO MÊS A MÊS
 # ─────────────────────────────────────────────
-def render_aba_comparacao(dff, col_mes, dimensao_col, dimensao_label, titulo):
-    """Reutilizável: gera visão mensal por qualquer dimensão."""
-    if col_mes not in dff.columns:
-        st.warning(f"Coluna de mês '{col_mes}' não disponível.")
-        return
-
-    grp = dff.groupby([col_mes, dimensao_col]).agg(
-        Leads=(COL_ID, "count"),
-        Reunioes=("is_reuniao", "sum"),
-        Fechados=("is_fechado", "sum"),
-    ).reset_index()
-    grp = grp.sort_values(col_mes)
-
-    # Pivot para tabela histórica
-    pivot = grp.pivot_table(index=dimensao_col, columns=col_mes, values="Fechados", aggfunc="sum", fill_value=0)
-
-    secao(titulo)
-    fig = px.bar(grp, x=col_mes, y="Fechados", color=dimensao_col,
-                 barmode="group", color_discrete_sequence=COLORS, text_auto=True)
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#EAEAEA", height=380, xaxis_title="Mês", yaxis_title="Fechados",
-        margin=dict(l=0, r=0, t=10, b=0), legend=dict(bgcolor="rgba(0,0,0,0)")
-    )
-    st.plotly_chart(fig, width="stretch")
-    st.caption("Tabela pivot — Fechados por mês")
-    st.dataframe(pivot, width="stretch")
-
-
 def modulo_comparacao(df: pd.DataFrame):
     st.title("📈 Comparação Mês a Mês")
-    dff = render_filtros(df)
+    df_leads, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    col_mes_opcoes = {
-        "Mês de Criação":     "mes_criacao_dt",
-        "Mês da Reunião":     "mes_reuniao_dt",
-        "Mês de Fechamento":  "mes_fechamento_dt",
-    }
-    tipo_mes = st.selectbox("Competência por", list(col_mes_opcoes.keys()))
-    col_mes  = col_mes_opcoes[tipo_mes]
-
-    aba_geral, aba_closer, aba_jornada, aba_tipo, aba_produto = st.tabs(
-        ["Visão Geral", "Por Closer", "Por Jornada", "Por Tipo", "Por Produto"]
+    aba_geral, aba_closer, aba_jornada, aba_tipo = st.tabs(
+        ["Visão Geral", "Por Closer", "Por Jornada", "Por Tipo de Lead"]
     )
 
     with aba_geral:
         secao("Leads, Reuniões e Fechados por Mês")
-        grp = dff.groupby(col_mes).agg(
-            Leads=(COL_ID, "count"),
-            Reunioes=("is_reuniao", "sum"),
-            Fechados=("is_fechado", "sum"),
-        ).reset_index().sort_values(col_mes)
-        grp["Conv%"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
+        gL = df_leads.groupby("mes_criacao_dt").size().reset_index(name="Leads")
+        gR = df_reunioes.groupby("mes_reuniao_dt").size().reset_index(name="Reuniões")
+        gF = df_fechados.groupby("mes_fechamento_dt").size().reset_index(name="Fechados")
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(name="Leads", x=grp[col_mes], y=grp["Leads"], marker_color=COLORS[0]))
-        fig.add_trace(go.Bar(name="Reuniões", x=grp[col_mes], y=grp["Reunioes"], marker_color=COLORS[1]))
-        fig.add_trace(go.Bar(name="Fechados", x=grp[col_mes], y=grp["Fechados"], marker_color=COLORS[2]))
+        fig.add_trace(go.Bar(name="Leads",    x=gL["mes_criacao_dt"],    y=gL["Leads"],    marker_color=COLORS[0]))
+        fig.add_trace(go.Bar(name="Reuniões", x=gR["mes_reuniao_dt"],    y=gR["Reuniões"], marker_color=COLORS[1]))
+        fig.add_trace(go.Bar(name="Fechados", x=gF["mes_fechamento_dt"], y=gF["Fechados"], marker_color=COLORS[2]))
         fig.update_layout(
             barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=380, margin=dict(l=0, r=0, t=10, b=0),
+            font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
-        st.plotly_chart(fig, width="stretch")
-        st.dataframe(grp.rename(columns={col_mes: "Mês"}), hide_index=True, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
+
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.caption("Leads por mês de criação")
+            st.dataframe(gL.rename(columns={"mes_criacao_dt": "Mês"}), hide_index=True, use_container_width=True)
+        with col_b:
+            st.caption("Reuniões por mês")
+            st.dataframe(gR.rename(columns={"mes_reuniao_dt": "Mês"}), hide_index=True, use_container_width=True)
+        with col_c:
+            st.caption("Fechados por mês")
+            st.dataframe(gF.rename(columns={"mes_fechamento_dt": "Mês"}), hide_index=True, use_container_width=True)
 
     with aba_closer:
-        render_aba_comparacao(dff, col_mes, COL_CLOSER, "Closer", "Fechados por Mês × Closer")
+        secao("Fechados por Mês × Closer")
+        if "mes_fechamento_dt" in df_fechados.columns:
+            evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            pivot = evo.pivot_table(index=COL_CLOSER, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
+            fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_CLOSER,
+                         barmode="group", color_discrete_sequence=COLORS, text_auto=True)
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
+                              legend=dict(bgcolor="rgba(0,0,0,0)"))
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(pivot, use_container_width=True)
 
     with aba_jornada:
-        render_aba_comparacao(dff, col_mes, COL_JORNADA, "Jornada", "Fechados por Mês × Jornada")
+        secao("Fechados por Mês × Jornada")
+        if "mes_fechamento_dt" in df_fechados.columns:
+            evo = df_fechados.groupby([COL_JORNADA, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            pivot = evo.pivot_table(index=COL_JORNADA, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
+            fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_JORNADA,
+                         barmode="group", color_discrete_sequence=COLORS)
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
+                              legend=dict(bgcolor="rgba(0,0,0,0)"))
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(pivot, use_container_width=True)
 
     with aba_tipo:
-        render_aba_comparacao(dff, col_mes, COL_TIPO, "Tipo de Lead", "Fechados por Mês × Tipo de Lead")
-
-    with aba_produto:
-        # Produtos precisam de explode
-        fechados = dff[dff["is_fechado"] & dff[COL_PRODUTOS].notna()].copy()
-        if not fechados.empty:
-            fechados["produto_list"] = fechados[COL_PRODUTOS].str.split(";")
-            exp = fechados.explode("produto_list")
-            exp["produto_list"] = exp["produto_list"].str.strip()
-            render_aba_comparacao(exp, col_mes, "produto_list", "Produto", "Fechados por Mês × Produto")
-        else:
-            st.info("Sem fechados com produto no período.")
+        secao("Fechados por Mês × Tipo de Lead")
+        if "mes_fechamento_dt" in df_fechados.columns:
+            evo = df_fechados.groupby([COL_TIPO, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            pivot = evo.pivot_table(index=COL_TIPO, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
+            fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_TIPO,
+                         barmode="group", color_discrete_sequence=COLORS)
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              font_color="#EAEAEA", height=400, margin=dict(l=0, r=0, t=10, b=0),
+                              legend=dict(bgcolor="rgba(0,0,0,0)"))
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(pivot, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -798,63 +653,54 @@ def modulo_comparacao(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_perdidos(df: pd.DataFrame):
     st.title("❌ Perdidos (pós-reunião)")
-    dff = render_filtros(df)
+    _, _, _, df_perdidos = render_filtros(df)
 
-    perdidos = dff[dff["is_perdido"] & dff["is_reuniao"]].copy()
-
-    if perdidos.empty:
+    if df_perdidos.empty:
         st.info("Sem perdidos com reunião ocorrida no período selecionado.")
         return
 
-    total_p = len(perdidos)
+    total_p = len(df_perdidos)
     secao(f"Total de perdidos após reunião: {total_p:,}")
 
     col_a, col_b = st.columns(2)
 
     with col_a:
         secao("Motivos de Perda")
-        motivos = perdidos[COL_MOTIVO_PERDA].value_counts().reset_index()
+        motivos = df_perdidos[COL_MOTIVO_PERDA].value_counts().reset_index()
         motivos.columns = ["Motivo", "Qtd"]
         motivos["% Total"] = (motivos["Qtd"] / total_p * 100).round(1).astype(str) + "%"
         fig = px.bar(motivos, x="Qtd", y="Motivo", orientation="h",
                      color_discrete_sequence=[COLORS[3]], text="Qtd")
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
-        )
-        st.plotly_chart(fig, width="stretch")
-        st.dataframe(motivos, hide_index=True, width="stretch")
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(motivos, hide_index=True, use_container_width=True)
 
     with col_b:
         secao("Perdidos por Closer")
-        por_closer = perdidos[COL_CLOSER].value_counts().reset_index()
+        por_closer = df_perdidos[COL_CLOSER].value_counts().reset_index()
         por_closer.columns = ["Closer", "Perdidos"]
         fig2 = px.bar(por_closer, x="Perdidos", y="Closer", orientation="h",
                       color_discrete_sequence=[COLORS[5]], text="Perdidos")
-        fig2.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0)
-        )
-        st.plotly_chart(fig2, width="stretch")
+        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                           font_color="#EAEAEA", height=400, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig2, use_container_width=True)
 
     secao("Origem × Motivo de Perda")
-    cross = perdidos.groupby([COL_ORIGEM, COL_MOTIVO_PERDA]).size().reset_index(name="Qtd")
+    cross = df_perdidos.groupby([COL_ORIGEM, COL_MOTIVO_PERDA]).size().reset_index(name="Qtd")
     cross = cross.sort_values("Qtd", ascending=False).head(30)
     fig3 = px.bar(cross, x="Qtd", y=COL_ORIGEM, color=COL_MOTIVO_PERDA,
                   orientation="h", color_discrete_sequence=COLORS, barmode="stack")
-    fig3.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#EAEAEA", height=460, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0),
-        legend=dict(bgcolor="rgba(0,0,0,0)")
-    )
-    st.plotly_chart(fig3, width="stretch")
+    fig3.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                       font_color="#EAEAEA", height=460, yaxis_title="", margin=dict(l=0, r=0, t=10, b=0),
+                       legend=dict(bgcolor="rgba(0,0,0,0)"))
+    st.plotly_chart(fig3, use_container_width=True)
 
     secao("Auditoria Individual")
-    closer_audit = st.selectbox("Filtrar Closer", ["Todos"] + sorted(perdidos[COL_CLOSER].dropna().unique().tolist()))
-    df_audit = perdidos if closer_audit == "Todos" else perdidos[perdidos[COL_CLOSER] == closer_audit]
-    cols_show = [COL_NOME, COL_CLOSER, COL_REUNIAO, COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA, COL_ORIGEM]
-    cols_show = [c for c in cols_show if c in df_audit.columns]
-    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, width="stretch")
+    closer_audit = st.selectbox("Filtrar Closer", ["Todos"] + sorted(df_perdidos[COL_CLOSER].dropna().unique().tolist()))
+    df_audit = df_perdidos if closer_audit == "Todos" else df_perdidos[df_perdidos[COL_CLOSER] == closer_audit]
+    cols_show = [c for c in [COL_NOME, COL_CLOSER, COL_REUNIAO, COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA, COL_ORIGEM] if c in df_audit.columns]
+    st.dataframe(df_audit[cols_show].reset_index(drop=True), hide_index=True, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
