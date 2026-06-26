@@ -288,15 +288,26 @@ def render_filtros(df: pd.DataFrame):
             produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[], key="produto_sel")
 
         with c8:
+            def explode_valores(col):
+                """Extrai valores únicos de colunas com múltiplos itens separados por ';'"""
+                return sorted(set(
+                    v.strip()
+                    for val in df[col].dropna()
+                    for v in str(val).split(";")
+                    if v.strip()
+                ))
+
             if COL_ERP in df.columns:
-                erps = sorted(df[COL_ERP].dropna().unique().tolist())
-                erp_sel = st.multiselect("ERP que utiliza", erps, default=erps, key="erp_sel")
+                erps = explode_valores(COL_ERP)
+                erp_sel = st.multiselect("ERP que utiliza", erps, default=[], key="erp_sel",
+                                         placeholder="Todos (sem filtro)")
             else:
                 erp_sel = []
 
             if COL_CRM_USO in df.columns:
-                crms = sorted(df[COL_CRM_USO].dropna().unique().tolist())
-                crm_sel = st.multiselect("CRM que utiliza", crms, default=crms, key="crm_sel")
+                crms = explode_valores(COL_CRM_USO)
+                crm_sel = st.multiselect("CRM que utiliza", crms, default=[], key="crm_sel",
+                                         placeholder="Todos (sem filtro)")
             else:
                 crm_sel = []
 
@@ -323,9 +334,13 @@ def render_filtros(df: pd.DataFrame):
             lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
         )
     if erp_sel and COL_ERP in df.columns:
-        mask &= df[COL_ERP].isin(erp_sel)
+        mask &= df[COL_ERP].fillna("").apply(
+            lambda x: any(p in [s.strip() for s in x.split(";")] for p in erp_sel)
+        )
     if crm_sel and COL_CRM_USO in df.columns:
-        mask &= df[COL_CRM_USO].isin(crm_sel)
+        mask &= df[COL_CRM_USO].fillna("").apply(
+            lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
+        )
 
     return df[mask].copy()
 
