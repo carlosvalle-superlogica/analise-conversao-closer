@@ -170,7 +170,7 @@ def load_data(path: str) -> pd.DataFrame:
     if COL_FECHAMENTO not in df.columns and COL_FECHAMENTO_FALLBACK in df.columns:
         df[COL_FECHAMENTO] = df[COL_FECHAMENTO_FALLBACK]
 
-    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO]
+    date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH_NATIVO]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -253,89 +253,77 @@ with st.sidebar:
 def render_filtros(df: pd.DataFrame):
     with st.expander("🔍 Filtros Globais", expanded=True):
 
-        # ── Linha 1: Datas ──────────────────────────────────────────────────
-        c1, c2 = st.columns(2)
+        # ── Linha 1: Datas independentes ────────────────────────────────────
+        st.markdown("##### 📅 Períodos (cada métrica usa sua própria data)")
+        c1, c2, c3 = st.columns(3)
+
+        def date_range(col, label, key):
+            """Retorna (data_ini, data_fim) para uma coluna de data."""
+            datas = df[col].dropna()
+            if len(datas) == 0:
+                return None, None
+            min_d, max_d = datas.min().date(), datas.max().date()
+            return st.date_input(label, value=(min_d, max_d),
+                                 min_value=min_d, max_value=max_d, key=key)
 
         with c1:
-            tipo_data = st.selectbox(
-                "Filtrar por data",
-                ["Data de Criação", "Reunião Ocorrida", "Data que entrou em Fechado"],
-                key="tipo_data",
-            )
-            col_data_map = {
-                "Data de Criação":             COL_CRIACAO,
-                "Reunião Ocorrida":            COL_REUNIAO,
-                "Data que entrou em Fechado":  COL_FECHAMENTO,
-            }
-            col_data = col_data_map[tipo_data]
-
-            datas_validas = df[col_data].dropna()
-            if len(datas_validas) == 0:
-                st.warning("Sem datas disponíveis para este filtro.")
-                return df
-
-            min_d = datas_validas.min().date()
-            max_d = datas_validas.max().date()
-            data_ini, data_fim = st.date_input(
-                "Período",
-                value=(min_d, max_d),
-                min_value=min_d,
-                max_value=max_d,
-                key="periodo",
-            )
+            st.caption("🟢 Leads — Data de Criação")
+            r_criacao = date_range(COL_CRIACAO, "Período de Criação", "periodo_criacao")
 
         with c2:
-            anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
-            ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
+            st.caption("🔵 Reuniões — Reunião Ocorrida")
+            r_reuniao = date_range(COL_REUNIAO, "Período de Reunião", "periodo_reuniao")
 
-            etapa_sel = st.selectbox(
-                "Etapa",
-                ["Todas", "Fechado", "Pago"],
-                key="etapa_sel",
-            )
+        with c3:
+            st.caption("🟣 Fechados — Data de Fechamento")
+            r_fechamento = date_range(COL_DATA_FECH_NATIVO, "Período de Fechamento", "periodo_fechamento")
 
         st.markdown("---")
 
         # ── Linha 2: Pessoas ────────────────────────────────────────────────
-        c3, c4, c5 = st.columns(3)
+        c4, c5, c6 = st.columns(3)
 
-        with c3:
+        with c4:
+            anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
+            ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
+
+            etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
+
+        with c5:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
             closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
 
-        with c4:
             sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
             sdr_sel = st.multiselect("SDR Responsável", sdrs, default=sdrs, key="sdr_sel")
 
-        with c5:
+        with c6:
             origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
             origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
+
+            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
+            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
 
         st.markdown("---")
 
         # ── Linha 3: Perfil ─────────────────────────────────────────────────
-        c6, c7, c8 = st.columns(3)
+        c7, c8, c9 = st.columns(3)
 
-        with c6:
-            jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
-            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
-
+        with c7:
             tipos = sorted(df[COL_TIPO].dropna().unique().tolist())
             tipo_sel = st.multiselect("Tipo de Lead", tipos, default=tipos, key="tipo_sel")
 
-        with c7:
-            # Produtos: explode pois são multi-valor separados por ";"
+        with c8:
             produtos_todos = sorted(set(
                 p.strip()
                 for val in df[COL_PRODUTOS].dropna()
                 for p in str(val).split(";")
                 if p.strip()
             ))
-            produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[], key="produto_sel")
+            produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[],
+                                         key="produto_sel", placeholder="Todos (sem filtro)")
 
-        with c8:
+        with c9:
             def explode_valores(col):
-                """Extrai valores únicos de colunas com múltiplos itens separados por ';'"""
                 return sorted(set(
                     v.strip()
                     for val in df[col].dropna()
@@ -344,24 +332,40 @@ def render_filtros(df: pd.DataFrame):
                 ))
 
             if COL_ERP in df.columns:
-                erps = explode_valores(COL_ERP)
-                erp_sel = st.multiselect("ERP que utiliza", erps, default=[], key="erp_sel",
-                                         placeholder="Todos (sem filtro)")
+                erp_sel = st.multiselect("ERP que utiliza", explode_valores(COL_ERP),
+                                         default=[], key="erp_sel", placeholder="Todos (sem filtro)")
             else:
                 erp_sel = []
 
             if COL_CRM_USO in df.columns:
-                crms = explode_valores(COL_CRM_USO)
-                crm_sel = st.multiselect("CRM que utiliza", crms, default=[], key="crm_sel",
-                                         placeholder="Todos (sem filtro)")
+                crm_sel = st.multiselect("CRM que utiliza", explode_valores(COL_CRM_USO),
+                                         default=[], key="crm_sel", placeholder="Todos (sem filtro)")
             else:
                 crm_sel = []
 
-    # ── Aplica máscaras ──────────────────────────────────────────────────────
-    mask = pd.Series([True] * len(df), index=df.index)
+    # ── Máscaras independentes ───────────────────────────────────────────────
+    # mL: máscara de leads — usa data de criação
+    mL = pd.Series([True] * len(df), index=df.index)
+    if r_criacao and r_criacao[0] and r_criacao[1]:
+        mL &= df[COL_CRIACAO].dt.date.between(r_criacao[0], r_criacao[1])
 
-    if col_data in df.columns:
-        mask &= df[col_data].dt.date.between(data_ini, data_fim)
+    # mR: máscara de reuniões — usa data da reunião ocorrida
+    mR = pd.Series([True] * len(df), index=df.index)
+    if r_reuniao and r_reuniao[0] and r_reuniao[1]:
+        mR &= df[COL_REUNIAO].dt.date.between(r_reuniao[0], r_reuniao[1])
+
+    # mF: máscara de fechados — usa data de fechamento
+    mF = pd.Series([True] * len(df), index=df.index)
+    if r_fechamento and r_fechamento[0] and r_fechamento[1]:
+        mF &= df[COL_DATA_FECH_NATIVO].dt.date.between(r_fechamento[0], r_fechamento[1])
+
+    # Máscara combinada: lead aparece se satisfaz a data relevante para cada evento
+    # Um deal é incluído se: está no período de criação OU teve reunião no período OU foi fechado no período
+    mask_data = mL | (df["is_reuniao"] & mR) | (df["is_fechado"] & mF)
+
+    # Filtros dimensionais (aplicam em todo o dataset)
+    mask = mask_data.copy()
+
     if ano_sel:
         mask &= df["ano_criacao"].isin(ano_sel)
     if etapa_sel != "Todas":
@@ -377,7 +381,6 @@ def render_filtros(df: pd.DataFrame):
     if tipo_sel:
         mask &= df[COL_TIPO].isin(tipo_sel)
     if produto_sel:
-        # mantém linhas cujo campo Produtos contenha ao menos um dos selecionados
         mask &= df[COL_PRODUTOS].fillna("").apply(
             lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
         )
@@ -390,8 +393,12 @@ def render_filtros(df: pd.DataFrame):
             lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
         )
 
-    return df[mask].copy()
+    # Salva máscaras no session_state para uso nos módulos
+    st.session_state["mL"] = mL
+    st.session_state["mR"] = mR
+    st.session_state["mF"] = mF
 
+    return df[mask].copy()
 
 # ─────────────────────────────────────────────
 # HELPERS
