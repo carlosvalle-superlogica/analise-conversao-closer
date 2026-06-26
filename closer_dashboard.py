@@ -520,55 +520,54 @@ def modulo_produtos(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 def modulo_perfil(df: pd.DataFrame):
     st.title("🧩 Perfil do Lead")
-    _, _, df_fechados, _ = render_filtros(df)
+    _, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    st.caption("Perfil baseado nos leads Fechados no período de fechamento selecionado.")
+    st.caption("Reuniões = período de reunião · Fechados = período de fechamento")
 
-    def conv_table(col, label):
-        grp = df_fechados.groupby(col).size().reset_index(name="Fechados")
-        grp = grp.sort_values("Fechados", ascending=False)
-        return grp.rename(columns={col: label})
+    def rfconv(col, label):
+        """Reuniões | Fechados | Conv R→F% por dimensão"""
+        r = df_reunioes.groupby(col).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(col).size().reset_index(name="Fechados")
+        tb = r.merge(f, on=col, how="outer").fillna(0)
+        tb["Reuniões"] = tb["Reuniões"].astype(int)
+        tb["Fechados"] = tb["Fechados"].astype(int)
+        tb["Conv R→F"] = pd.to_numeric(
+            tb["Fechados"] / tb["Reuniões"].replace(0, float("nan")) * 100,
+            errors="coerce").fillna(0).round(1).astype(str) + "%"
+        return tb.sort_values("Fechados", ascending=False).rename(columns={col: label})
+
+    def render_aba(col, label, color):
+        tb = rfconv(col, label)
+        col_a, col_b = st.columns([1, 1.4])
+        with col_a:
+            st.dataframe(tb, hide_index=True, width='stretch')
+        with col_b:
+            fig = px.bar(tb, x=label, y=["Reuniões", "Fechados"],
+                         barmode="group", color_discrete_sequence=[COLORS[1], color])
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              font_color="#EAEAEA", height=360,
+                              margin=dict(l=0, r=0, t=10, b=0),
+                              legend=dict(bgcolor="rgba(0,0,0,0)"))
+            fig.update_xaxes(tickangle=30)
+            st.plotly_chart(fig, width='stretch')
 
     aba1, aba2, aba3, aba4 = st.tabs(["🏠 Carteira de Imóveis", "📄 Contratos", "🧭 Jornada", "🔖 Tipo de Lead"])
 
     with aba1:
-        secao("Carteira de Imóveis nos Fechados")
-        tb = conv_table(COL_CARTEIRA, "Carteira de Imóveis")
-        st.dataframe(tb, hide_index=True, width='stretch')
-        fig = px.bar(tb, x="Carteira de Imóveis", y="Fechados", color_discrete_sequence=[PURPLE])
-        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                          font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
-        fig.update_xaxes(tickangle=30)
-        st.plotly_chart(fig, width='stretch')
+        secao("Carteira de Imóveis")
+        render_aba(COL_CARTEIRA, "Carteira de Imóveis", COLORS[2])
 
     with aba2:
-        secao("Contratos de Locação nos Fechados")
-        tb2 = conv_table(COL_CONTRATOS, "Contratos de Locação")
-        st.dataframe(tb2, hide_index=True, width='stretch')
-        fig2 = px.bar(tb2, x="Contratos de Locação", y="Fechados", color_discrete_sequence=[COLORS[1]])
-        fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
-        fig2.update_xaxes(tickangle=30)
-        st.plotly_chart(fig2, width='stretch')
+        secao("Contratos de Locação")
+        render_aba(COL_CONTRATOS, "Contratos de Locação", COLORS[3])
 
     with aba3:
-        secao("Jornada nos Fechados")
-        tb3 = conv_table(COL_JORNADA, "Jornada")
-        st.dataframe(tb3, hide_index=True, width='stretch')
-        fig3 = px.bar(tb3, x="Jornada", y="Fechados", color_discrete_sequence=[COLORS[2]])
-        fig3.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
-        st.plotly_chart(fig3, width='stretch')
+        secao("Jornada")
+        render_aba(COL_JORNADA, "Jornada", COLORS[4])
 
     with aba4:
-        secao("Tipo de Lead nos Fechados")
-        tb4 = conv_table(COL_TIPO, "Tipo de Lead")
-        st.dataframe(tb4, hide_index=True, width='stretch')
-        fig4 = px.bar(tb4, x="Tipo de Lead", y="Fechados", color_discrete_sequence=[COLORS[3]])
-        fig4.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                           font_color="#EAEAEA", height=360, margin=dict(l=0, r=0, t=10, b=0))
-        fig4.update_xaxes(tickangle=30)
-        st.plotly_chart(fig4, width='stretch')
+        secao("Tipo de Lead")
+        render_aba(COL_TIPO, "Tipo de Lead", COLORS[5])
 
 
 # ─────────────────────────────────────────────
