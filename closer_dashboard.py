@@ -19,80 +19,88 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── Base ── */
 html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
-    font-size: 13px;
 }
 
-/* Reduz fonte global de todos os elementos Streamlit */
-div[data-testid="stMarkdownContainer"] p,
-div[data-testid="stMarkdownContainer"] li,
-label, .stSelectbox label, .stMultiSelect label,
-[data-testid="stWidgetLabel"] { font-size: 11px !important; }
-
-/* Itens dentro dos multiselects */
-span[data-baseweb="tag"] { font-size: 10px !important; padding: 2px 6px !important; }
-div[data-baseweb="select"] input { font-size: 11px !important; }
-div[data-baseweb="menu"] li { font-size: 11px !important; }
-
-/* Tabelas */
-[data-testid="stDataFrame"] { font-size: 11px !important; }
-
-/* Títulos de seção dentro de expander */
-.filter-block-title {
-    font-size: 11px !important;
-    font-weight: 600;
-    color: #7EC8E3;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin: 4px 0 8px 0;
-}
-
-/* ── Layout ── */
+/* Layout */
 .block-container {
-    padding-top: 1.5rem !important; padding-bottom: 10rem !important;
-    padding-left: 2rem !important; padding-right: 2rem !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 10rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
     max-width: 1400px !important;
 }
 
-/* ── Metric cards ── */
+/* Reduce global font */
+div[data-testid="stMarkdownContainer"] p { font-size: 12px !important; }
+[data-testid="stWidgetLabel"] p { font-size: 11px !important; }
+span[data-baseweb="tag"] { font-size: 10px !important; padding: 2px 5px !important; }
+div[data-baseweb="menu"] li { font-size: 11px !important; }
+
+/* Filter block titles */
+.filter-block-title {
+    font-size: 10px !important;
+    font-weight: 700;
+    color: #5BC0DE;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 2px 0 6px 0;
+}
+
+/* Metric cards */
 .metric-card {
     background: linear-gradient(135deg, #0A1628 0%, #0D1F3C 100%);
-    border: 1px solid #1A3A5C; border-radius: 12px;
-    padding: 18px 20px; text-align: center; margin-bottom: 12px;
+    border: 1px solid #1A3A5C;
+    border-radius: 12px;
+    padding: 18px 20px;
+    text-align: center;
+    margin-bottom: 12px;
 }
-.metric-card .label { font-size: 10px; color: #6A8FAF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.metric-card .value { font-size: 26px; font-weight: 700; color: #E8F4FD; }
-.metric-card .sub   { font-size: 11px; color: #3B9ECC; margin-top: 4px; }
+.metric-card .label {
+    font-size: 10px;
+    color: #6A8FAF;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+.metric-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #E8F4FD;
+}
+.metric-card .sub {
+    font-size: 11px;
+    color: #3B9ECC;
+    margin-top: 4px;
+}
 
-/* ── Section titles ── */
+/* Section titles */
 .section-title {
-    font-size: 14px; font-weight: 600; color: #E8F4FD;
-    border-left: 4px solid #2196F3; padding-left: 10px; margin: 28px 0 12px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #E8F4FD;
+    border-left: 4px solid #2196F3;
+    padding-left: 10px;
+    margin: 28px 0 12px 0;
 }
 
-/* ── Sidebar ── */
-div[data-testid="stSidebar"] { background: #060E1C; }
+/* Sidebar */
+div[data-testid="stSidebar"] {
+    background: #060E1C;
+}
 
-/* ── Expander ── */
-details summary { font-size: 12px !important; }
-
-/* ── Accent: troca roxo por azul nos elementos nativos Streamlit ── */
+/* Multiselect tags blue */
 [data-testid="stMultiSelect"] span[data-baseweb="tag"] {
     background-color: #1565C0 !important;
     color: #E8F4FD !important;
 }
-button[kind="primary"],
-div[data-testid="stButton"] button {
-    background-color: #1565C0 !important;
-    border-color: #1565C0 !important;
-}
-/* Radio selecionado */
-[data-testid="stRadio"] label[data-selected="true"] { color: #42A5F5 !important; }
 
-/* Divider dentro do filtro */
-hr { border-color: #1A3A5C !important; margin: 10px 0 !important; }
+/* Dividers */
+hr {
+    border-color: #1A3A5C !important;
+    margin: 8px 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
