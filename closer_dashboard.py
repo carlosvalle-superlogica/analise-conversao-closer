@@ -313,19 +313,19 @@ def render_filtros(df: pd.DataFrame):
         if tipo_sel:
             m &= d[COL_TIPO].isin(tipo_sel)
         if produto_sel:
-            m &= d[COL_PRODUTOS].fillna("").apply(
+            m &= d[COL_PRODUTOS].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
             )
         if interesse_sel and COL_INTERESSE in d.columns:
-            m &= d[COL_INTERESSE].fillna("").apply(
+            m &= d[COL_INTERESSE].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in interesse_sel)
             )
         if erp_sel and COL_ERP in d.columns:
-            m &= d[COL_ERP].fillna("").apply(
+            m &= d[COL_ERP].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in erp_sel)
             )
         if crm_sel and COL_CRM_USO in d.columns:
-            m &= d[COL_CRM_USO].fillna("").apply(
+            m &= d[COL_CRM_USO].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_sel)
             )
         if tag_sel and COL_TAG in d.columns:
