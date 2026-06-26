@@ -18,25 +18,81 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+/* ── Base ── */
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+}
+
+/* Reduz fonte global de todos os elementos Streamlit */
+div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stMarkdownContainer"] li,
+label, .stSelectbox label, .stMultiSelect label,
+[data-testid="stWidgetLabel"] { font-size: 11px !important; }
+
+/* Itens dentro dos multiselects */
+span[data-baseweb="tag"] { font-size: 10px !important; padding: 2px 6px !important; }
+div[data-baseweb="select"] input { font-size: 11px !important; }
+div[data-baseweb="menu"] li { font-size: 11px !important; }
+
+/* Tabelas */
+[data-testid="stDataFrame"] { font-size: 11px !important; }
+
+/* Títulos de seção dentro de expander */
+.filter-block-title {
+    font-size: 11px !important;
+    font-weight: 600;
+    color: #7EC8E3;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin: 4px 0 8px 0;
+}
+
+/* ── Layout ── */
 .block-container {
-    padding-top: 2rem !important; padding-bottom: 10rem !important;
+    padding-top: 1.5rem !important; padding-bottom: 10rem !important;
     padding-left: 2rem !important; padding-right: 2rem !important;
     max-width: 1400px !important;
 }
+
+/* ── Metric cards ── */
 .metric-card {
-    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
-    border: 1px solid #2D2D4E; border-radius: 12px;
-    padding: 20px 24px; text-align: center; margin-bottom: 12px;
+    background: linear-gradient(135deg, #0A1628 0%, #0D1F3C 100%);
+    border: 1px solid #1A3A5C; border-radius: 12px;
+    padding: 18px 20px; text-align: center; margin-bottom: 12px;
 }
-.metric-card .label { font-size: 12px; color: #8888AA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.metric-card .value { font-size: 28px; font-weight: 700; color: #EAEAEA; }
-.metric-card .sub   { font-size: 13px; color: #6C3FC5; margin-top: 4px; }
+.metric-card .label { font-size: 10px; color: #6A8FAF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.metric-card .value { font-size: 26px; font-weight: 700; color: #E8F4FD; }
+.metric-card .sub   { font-size: 11px; color: #3B9ECC; margin-top: 4px; }
+
+/* ── Section titles ── */
 .section-title {
-    font-size: 18px; font-weight: 600; color: #EAEAEA;
-    border-left: 4px solid #6C3FC5; padding-left: 12px; margin: 32px 0 16px 0;
+    font-size: 14px; font-weight: 600; color: #E8F4FD;
+    border-left: 4px solid #2196F3; padding-left: 10px; margin: 28px 0 12px 0;
 }
-div[data-testid="stSidebar"] { background:#0D0D1A; }
+
+/* ── Sidebar ── */
+div[data-testid="stSidebar"] { background: #060E1C; }
+
+/* ── Expander ── */
+details summary { font-size: 12px !important; }
+
+/* ── Accent: troca roxo por azul nos elementos nativos Streamlit ── */
+[data-testid="stMultiSelect"] span[data-baseweb="tag"] {
+    background-color: #1565C0 !important;
+    color: #E8F4FD !important;
+}
+button[kind="primary"],
+div[data-testid="stButton"] button {
+    background-color: #1565C0 !important;
+    border-color: #1565C0 !important;
+}
+/* Radio selecionado */
+[data-testid="stRadio"] label[data-selected="true"] { color: #42A5F5 !important; }
+
+/* Divider dentro do filtro */
+hr { border-color: #1A3A5C !important; margin: 10px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,7 +250,7 @@ def render_filtros(df: pd.DataFrame):
             ))
 
         # ── Bloco 1: Datas (2 colunas simétricas) ──────────────────────────
-        st.markdown("##### 📅 Período")
+        st.markdown("<div class='filter-block-title'>📅 Período</div>", unsafe_allow_html=True)
         dc1, dc2 = st.columns(2)
         with dc1:
             st.caption("🔵 Reunião Ocorrida")
@@ -206,7 +262,7 @@ def render_filtros(df: pd.DataFrame):
         st.markdown("---")
 
         # ── Bloco 2: Equipe (2 colunas) ────────────────────────────────────
-        st.markdown("##### 👥 Equipe")
+        st.markdown("<div class='filter-block-title'>👥 Equipe</div>", unsafe_allow_html=True)
         ec1, ec2 = st.columns(2)
         with ec1:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
@@ -218,7 +274,7 @@ def render_filtros(df: pd.DataFrame):
         st.markdown("---")
 
         # ── Bloco 3: Lead (3 colunas) ──────────────────────────────────────
-        st.markdown("##### 🎯 Lead")
+        st.markdown("<div class='filter-block-title'>🎯 Lead</div>", unsafe_allow_html=True)
         lc1, lc2, lc3 = st.columns(3)
         with lc1:
             origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
@@ -244,7 +300,7 @@ def render_filtros(df: pd.DataFrame):
         st.markdown("---")
 
         # ── Bloco 4: Tecnologia (2 colunas) ────────────────────────────────
-        st.markdown("##### 💻 Tecnologia")
+        st.markdown("<div class='filter-block-title'>💻 Tecnologia</div>", unsafe_allow_html=True)
         tc1, tc2 = st.columns(2)
         with tc1:
             erp_sel = st.multiselect("ERP que utiliza", explode_vals(COL_ERP) if COL_ERP in df.columns else [],
@@ -324,8 +380,9 @@ def render_filtros(df: pd.DataFrame):
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
-PURPLE = "#6C3FC5"
-COLORS = ["#6C3FC5", "#A855F7", "#34D399", "#F59E0B", "#60A5FA", "#F87171", "#818CF8", "#FB923C"]
+BLUE   = "#2196F3"
+PURPLE = "#2196F3"   # alias mantido para compatibilidade
+COLORS = ["#2196F3", "#42A5F5", "#00BCD4", "#26C6DA", "#0288D1", "#EF5350", "#66BB6A", "#FFA726"]
 
 def pct(a, b):
     return f"{a/b*100:.1f}%" if b > 0 else "0%"
