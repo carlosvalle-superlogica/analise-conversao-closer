@@ -386,9 +386,12 @@ def modulo_closers(df: pd.DataFrame):
         Reunioes=("is_reuniao", "sum"),
         Fechados=("is_fechado", "sum"),
     ).reset_index()
-    perf["Conv R→F (%)"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1)
-    perf["Conv L→F (%)"] = (perf["Fechados"] / perf["Leads"] * 100).round(1)
-    perf = perf.sort_values("Conv R→F (%)", ascending=False).reset_index(drop=True)
+    perf["_conv_rf"] = (perf["Fechados"] / perf["Reunioes"].where(perf["Reunioes"] > 0) * 100).fillna(0).round(1)
+    perf["_conv_lf"] = (perf["Fechados"] / perf["Leads"] * 100).round(1)
+    perf = perf.sort_values("_conv_rf", ascending=False).reset_index(drop=True)
+    perf["Conv R→F (%)"] = perf["_conv_rf"].astype(str) + "%"
+    perf["Conv L→F (%)"] = perf["_conv_lf"].astype(str) + "%"
+    perf = perf.drop(columns=["_conv_rf", "_conv_lf"])
 
     secao("Ranking por Conversão Reunião → Fechado")
 
@@ -397,12 +400,12 @@ def modulo_closers(df: pd.DataFrame):
     with col_a:
         st.markdown("##### 🥇 Top 5")
         top5 = perf.head(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
-        top5["Conv R→F (%)"] = top5["Conv R→F (%)"].astype(str) + "%"
+        # já formatado com %
         st.dataframe(top5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
     with col_b:
         st.markdown("##### ⚠️ Atenção (bottom 5 com ≥5 reuniões)")
         bot5 = perf[perf["Reunioes"] >= 5].tail(5)[[COL_CLOSER, "Reunioes", "Fechados", "Conv R→F (%)"]].copy()
-        bot5["Conv R→F (%)"] = bot5["Conv R→F (%)"].astype(str) + "%"
+        # já formatado com %
         st.dataframe(bot5.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
 
     secao("Reuniões vs Fechados por Closer")
@@ -431,8 +434,7 @@ def modulo_closers(df: pd.DataFrame):
 
     secao("Tabela Completa")
     perf_disp = perf.copy()
-    perf_disp["Conv R→F (%)"] = perf_disp["Conv R→F (%)"].astype(str) + "%"
-    perf_disp["Conv L→F (%)"] = perf_disp["Conv L→F (%)"].astype(str) + "%"
+    # já formatado com % acima
     st.dataframe(perf_disp.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width="stretch")
 
 
@@ -509,8 +511,8 @@ def modulo_perfil(df: pd.DataFrame):
             Reunioes=("is_reuniao", "sum"),
             Fechados=("is_fechado", "sum"),
         ).reset_index()
-        grp["Conv R→F (%)"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1)
-        grp["Conv L→F (%)"] = (grp["Fechados"] / grp["Leads"] * 100).round(1)
+        grp["Conv R→F (%)"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
+        grp["Conv L→F (%)"] = (grp["Fechados"] / grp["Leads"] * 100).round(1).astype(str) + "%"
         return grp.rename(columns={col: label})
 
     aba1, aba2, aba3, aba4 = st.tabs(["🏠 Carteira de Imóveis", "📄 Contratos", "🧭 Jornada", "🔖 Tipo de Lead"])
@@ -629,7 +631,7 @@ def modulo_comparacao(df: pd.DataFrame):
             Reunioes=("is_reuniao", "sum"),
             Fechados=("is_fechado", "sum"),
         ).reset_index().sort_values(col_mes)
-        grp["Conv%"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1)
+        grp["Conv%"] = (grp["Fechados"] / grp["Reunioes"].where(grp["Reunioes"] > 0) * 100).fillna(0).round(1).astype(str) + "%"
 
         fig = go.Figure()
         fig.add_trace(go.Bar(name="Leads", x=grp[col_mes], y=grp["Leads"], marker_color=COLORS[0]))
