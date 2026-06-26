@@ -24,22 +24,31 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+/* Espaco geral */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 4rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    max-width: 1400px !important;
+}
+
 .metric-card {
     background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
     border: 1px solid #2D2D4E;
     border-radius: 12px;
     padding: 20px 24px;
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 .metric-card .label { font-size: 12px; color: #8888AA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.metric-card .value { font-size: 32px; font-weight: 700; color: #EAEAEA; }
+.metric-card .value { font-size: 28px; font-weight: 700; color: #EAEAEA; }
 .metric-card .sub   { font-size: 13px; color: #6C3FC5; margin-top: 4px; }
 
 .section-title {
     font-size: 18px; font-weight: 600; color: #EAEAEA;
     border-left: 4px solid #6C3FC5;
-    padding-left: 12px; margin: 24px 0 16px 0;
+    padding-left: 12px; margin: 32px 0 16px 0;
 }
 
 .badge-ok   { background:#1a3a2a; color:#4CAF50; border-radius:6px; padding:2px 8px; font-size:12px; }
@@ -47,6 +56,31 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .badge-bad  { background:#3a1a1a; color:#F44336; border-radius:6px; padding:2px 8px; font-size:12px; }
 
 div[data-testid="stSidebar"] { background:#0D0D1A; }
+
+/* Mobile */
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 1rem !important;
+        padding-bottom: 3rem !important;
+    }
+    .metric-card .value { font-size: 22px; }
+    .metric-card .label { font-size: 11px; }
+    .metric-card { padding: 14px 16px; }
+    .section-title { font-size: 15px; margin: 20px 0 12px 0; }
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+    [data-testid="stDataFrame"] { overflow-x: auto !important; }
+    div[data-testid="stSidebar"] { width: 85vw !important; }
+}
+@media (max-width: 480px) {
+    .metric-card .value { font-size: 18px; }
+    h1 { font-size: 20px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
