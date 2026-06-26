@@ -466,6 +466,33 @@ def modulo_closers(df: pd.DataFrame):
     secao("Tabela Completa")
     st.dataframe(perf.rename(columns={COL_CLOSER: "Closer"}), hide_index=True, width='stretch', height=min(len(perf)*38+50, 900))
 
+    # ── Eficiência SDR × Closer ─────────────────────────────────────────────
+    secao("Eficiência por Pessoa")
+    st.caption("Reuniões = período de reunião · Fechados = período de fechamento")
+
+    def efic_table(col, label):
+        r = df_reunioes.groupby(col).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(col).size().reset_index(name="Fechados")
+        tb = r.merge(f, on=col, how="outer").fillna(0)
+        tb["Reuniões"] = tb["Reuniões"].astype(int)
+        tb["Fechados"] = tb["Fechados"].astype(int)
+        tb["Conv R→F"] = pd.to_numeric(
+            tb["Fechados"] / tb["Reuniões"].replace(0, float("nan")) * 100,
+            errors="coerce").fillna(0).round(1).astype(str) + "%"
+        return tb.sort_values("Reuniões", ascending=False).rename(columns={col: label})
+
+    ec1, ec2 = st.columns(2)
+    with ec1:
+        st.markdown("##### 🎯 Eficiência SDR")
+        tb_sdr = efic_table(COL_SDR, "SDR Responsável")
+        st.dataframe(tb_sdr, hide_index=True, width='stretch',
+                     height=min(len(tb_sdr) * 38 + 50, 800))
+    with ec2:
+        st.markdown("##### 🏆 Eficiência Closer")
+        tb_closer = efic_table(COL_CLOSER, "Closer Responsável")
+        st.dataframe(tb_closer, hide_index=True, width='stretch',
+                     height=min(len(tb_closer) * 38 + 50, 800))
+
 
 # ─────────────────────────────────────────────
 # MÓDULO 3: PRODUTOS FECHADOS
