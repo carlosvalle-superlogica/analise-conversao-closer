@@ -189,7 +189,10 @@ def load_data(path: str) -> pd.DataFrame:
         df["mes_pago_dt"] = df[COL_PAGO].dt.strftime("%Y-%m")
 
     # Flag fechado
-    df["is_fechado"]  = df[COL_ETAPA].isin(ETAPAS_FECHADO)
+    # is_fechado = teve Date entered Fechado preenchido (independente da etapa atual)
+    # Isso alinha com o HubSpot que conta deals que PASSARAM por Fechado,
+    # mesmo que depois tenham sido reabertos ou perdidos
+    df["is_fechado"]  = df[COL_FECHAMENTO].notna()
     df["is_reuniao"]  = df[COL_REUNIAO].notna()
     df["is_perdido"]  = df[COL_ETAPA] == "Perdidos"
 
