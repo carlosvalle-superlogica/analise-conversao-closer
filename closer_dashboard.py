@@ -212,18 +212,20 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 def render_filtros(df: pd.DataFrame):
     with st.expander("🔍 Filtros Globais", expanded=True):
-        c1, c2, c3 = st.columns(3)
+
+        # ── Linha 1: Datas ──────────────────────────────────────────────────
+        c1, c2 = st.columns(2)
 
         with c1:
             tipo_data = st.selectbox(
                 "Filtrar por data",
-                ["Data de Criação", "Reunião Ocorrida", "Data de Fechamento"],
+                ["Data de Criação", "Reunião Ocorrida", "Data que entrou em Fechado"],
                 key="tipo_data",
             )
             col_data_map = {
-                "Data de Criação":     COL_CRIACAO,
-                "Reunião Ocorrida":    COL_REUNIAO,
-                "Data de Fechamento":  COL_FECHAMENTO,
+                "Data de Criação":             COL_CRIACAO,
+                "Reunião Ocorrida":            COL_REUNIAO,
+                "Data que entrou em Fechado":  COL_FECHAMENTO,
             }
             col_data = col_data_map[tipo_data]
 
@@ -246,17 +248,59 @@ def render_filtros(df: pd.DataFrame):
             anos = sorted(df["ano_criacao"].dropna().unique().astype(int).tolist(), reverse=True)
             ano_sel = st.multiselect("Ano (criação)", anos, default=anos, key="ano_sel")
 
+        st.markdown("---")
+
+        # ── Linha 2: Pessoas ────────────────────────────────────────────────
+        c3, c4, c5 = st.columns(3)
+
+        with c3:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
             closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
 
-        with c3:
+        with c4:
+            sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
+            sdr_sel = st.multiselect("SDR Responsável", sdrs, default=sdrs, key="sdr_sel")
+
+        with c5:
+            origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
+            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
+
+        st.markdown("---")
+
+        # ── Linha 3: Perfil ─────────────────────────────────────────────────
+        c6, c7, c8 = st.columns(3)
+
+        with c6:
             jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
             jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
 
             tipos = sorted(df[COL_TIPO].dropna().unique().tolist())
             tipo_sel = st.multiselect("Tipo de Lead", tipos, default=tipos, key="tipo_sel")
 
-    # Aplica máscaras
+        with c7:
+            # Produtos: explode pois são multi-valor separados por ";"
+            produtos_todos = sorted(set(
+                p.strip()
+                for val in df[COL_PRODUTOS].dropna()
+                for p in str(val).split(";")
+                if p.strip()
+            ))
+            produto_sel = st.multiselect("Produtos Fechados", produtos_todos, default=[], key="produto_sel")
+
+        with c8:
+            if COL_ERP in df.columns:
+                erps = sorted(df[COL_ERP].dropna().unique().tolist())
+                erp_sel = st.multiselect("ERP que utiliza", erps, default=erps, key="erp_sel")
+            else:
+                erp_sel = []
+
+            if COL_CRM_USO in df.columns:
+                crms = sorted(df[COL_CRM_USO].dropna().unique().tolist())
+                crm_sel = st.multiselect("CRM que utiliza", crms, default=crms, key="crm_sel")
+            else:
+                crm_sel = []
+
+    # ── Aplica máscaras ──────────────────────────────────────────────────────
     mask = pd.Series([True] * len(df), index=df.index)
 
     if col_data in df.columns:
@@ -265,10 +309,23 @@ def render_filtros(df: pd.DataFrame):
         mask &= df["ano_criacao"].isin(ano_sel)
     if closer_sel:
         mask &= df[COL_CLOSER].isin(closer_sel)
+    if sdr_sel:
+        mask &= df[COL_SDR].isin(sdr_sel)
+    if origem_sel:
+        mask &= df[COL_ORIGEM].isin(origem_sel)
     if jornada_sel:
         mask &= df[COL_JORNADA].isin(jornada_sel)
     if tipo_sel:
         mask &= df[COL_TIPO].isin(tipo_sel)
+    if produto_sel:
+        # mantém linhas cujo campo Produtos contenha ao menos um dos selecionados
+        mask &= df[COL_PRODUTOS].fillna("").apply(
+            lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
+        )
+    if erp_sel and COL_ERP in df.columns:
+        mask &= df[COL_ERP].isin(erp_sel)
+    if crm_sel and COL_CRM_USO in df.columns:
+        mask &= df[COL_CRM_USO].isin(crm_sel)
 
     return df[mask].copy()
 
