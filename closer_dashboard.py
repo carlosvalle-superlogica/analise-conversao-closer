@@ -115,26 +115,50 @@ ETAPAS_FECHADO = ["Fechado", "Pago"]
 # ─────────────────────────────────────────────
 # CARGA DE DADOS
 # ─────────────────────────────────────────────
-@st.cache_data(show_spinner="Carregando dados…")
+# Colunas necessárias — descarta o restante na leitura para economizar RAM
+_COLS_USADAS = {
+    COL_ID, COL_NOME, COL_CLOSER, COL_SDR, COL_ETAPA,
+    COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH,
+    COL_PRODUTOS, COL_JORNADA, COL_TIPO, COL_ORIGEM,
+    COL_CARTEIRA, COL_CONTRATOS,
+    COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA,
+    COL_ERP, COL_CRM_USO, COL_INTERESSE, COL_TAG, COL_VALOR,
+}
+
+@st.cache_data(show_spinner="Carregando dados…", max_entries=1)
 def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, low_memory=False)
+    df = pd.read_csv(
+        path,
+        low_memory=False,
+        usecols=lambda c: c.strip() in _COLS_USADAS,
+    )
     df.columns = df.columns.str.strip()
+
+    # Converter colunas de texto repetitivo para category (economiza RAM)
+    cat_cols = [
+        COL_CLOSER, COL_SDR, COL_ETAPA, COL_JORNADA, COL_TIPO,
+        COL_ORIGEM, COL_CARTEIRA, COL_CONTRATOS, COL_MOTIVO_PERDA,
+        COL_SUBMOTIVO, COL_ERP, COL_CRM_USO, COL_TAG,
+    ]
+    for col in cat_cols:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
 
     date_cols = [COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Flags base (sem filtro de data)
+    # Flags base
     df["is_fechado"] = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_DATA_FECH].notna()
     df["is_reuniao"] = df[COL_REUNIAO].notna()
     df["is_perdido"] = df[COL_ETAPA] == "Perdidos"
 
     if COL_CRIACAO in df.columns:
-        df["ano_criacao"]     = df[COL_CRIACAO].dt.year
-        df["mes_criacao_dt"]  = df[COL_CRIACAO].dt.strftime("%Y-%m")
+        df["ano_criacao"]    = df[COL_CRIACAO].dt.year.astype("Int16")
+        df["mes_criacao_dt"] = df[COL_CRIACAO].dt.strftime("%Y-%m")
     if COL_REUNIAO in df.columns:
-        df["mes_reuniao_dt"]  = df[COL_REUNIAO].dt.strftime("%Y-%m")
+        df["mes_reuniao_dt"] = df[COL_REUNIAO].dt.strftime("%Y-%m")
     if COL_DATA_FECH in df.columns:
         df["mes_fechamento_dt"] = df[COL_DATA_FECH].dt.strftime("%Y-%m")
 
@@ -390,8 +414,8 @@ def modulo_geral(df: pd.DataFrame):
 
     def reun_fech_conv(dim_col, dim_label):
         """Tabela: Dimensão | Reuniões | Fechados | Conv R→F%"""
-        r = df_reunioes.groupby(dim_col).size().reset_index(name="Reuniões")
-        f = df_fechados.groupby(dim_col).size().reset_index(name="Fechados")
+        r = df_reunioes.groupby(dim_col, observed=True).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(dim_col, observed=True).size().reset_index(name="Fechados")
         tb = r.merge(f, on=dim_col, how="outer").fillna(0)
         tb["Reuniões"] = tb["Reuniões"].astype(int)
         tb["Fechados"] = tb["Fechados"].astype(int)
@@ -409,8 +433,8 @@ def modulo_geral(df: pd.DataFrame):
         st.dataframe(reun_fech_conv(COL_TIPO, "Tipo"), hide_index=True, width='stretch', height=800)
 
     secao("Performance por Closer")
-    perf_reun = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
-    perf_fech = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf_reun = df_reunioes.groupby(COL_CLOSER, observed=True).size().reset_index(name="Reuniões")
+    perf_fech = df_fechados.groupby(COL_CLOSER, observed=True).size().reset_index(name="Fechados")
     perf = perf_reun.merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
     perf["Reuniões"] = perf["Reuniões"].astype(int)
     perf["Fechados"] = perf["Fechados"].astype(int)
@@ -426,8 +450,8 @@ def modulo_closers(df: pd.DataFrame):
     st.title("🏆 Performance de Closers")
     _, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    perf_reun = df_reunioes.groupby(COL_CLOSER).size().reset_index(name="Reuniões")
-    perf_fech = df_fechados.groupby(COL_CLOSER).size().reset_index(name="Fechados")
+    perf_reun = df_reunioes.groupby(COL_CLOSER, observed=True).size().reset_index(name="Reuniões")
+    perf_fech = df_fechados.groupby(COL_CLOSER, observed=True).size().reset_index(name="Fechados")
     perf = perf_reun.merge(perf_fech, on=COL_CLOSER, how="outer").fillna(0)
     perf["Reuniões"] = perf["Reuniões"].astype(int)
     perf["Fechados"] = perf["Fechados"].astype(int)
@@ -460,7 +484,7 @@ def modulo_closers(df: pd.DataFrame):
 
     secao("Evolução Mensal de Fechados por Closer")
     if "mes_fechamento_dt" in df_fechados.columns:
-        evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+        evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"], observed=True).size().reset_index(name="Fechados")
         fig2 = px.line(evo, x="mes_fechamento_dt", y="Fechados", color=COL_CLOSER,
                        color_discrete_sequence=COLORS, markers=True)
         fig2.update_layout(
@@ -478,8 +502,8 @@ def modulo_closers(df: pd.DataFrame):
     st.caption("Reuniões = período de reunião · Fechados = período de fechamento")
 
     def efic_table(col, label):
-        r = df_reunioes.groupby(col).size().reset_index(name="Reuniões")
-        f = df_fechados.groupby(col).size().reset_index(name="Fechados")
+        r = df_reunioes.groupby(col, observed=True).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(col, observed=True).size().reset_index(name="Fechados")
         tb = r.merge(f, on=col, how="outer").fillna(0)
         tb["Reuniões"] = tb["Reuniões"].astype(int)
         tb["Fechados"] = tb["Fechados"].astype(int)
@@ -537,7 +561,7 @@ def modulo_produtos(df: pd.DataFrame):
         st.dataframe(mix, hide_index=True, width='stretch', height=min(len(mix)*38+50, 800))
 
     secao("Produtos por Closer")
-    por_closer = exploded.groupby([COL_CLOSER, "produto_list"]).size().reset_index(name="Qtd")
+    por_closer = exploded.groupby([COL_CLOSER, "produto_list"], observed=True).size().reset_index(name="Qtd")
     closer_opts = sorted(por_closer[COL_CLOSER].unique())
     if closer_opts:
         closer_sel2 = st.selectbox("Selecione o Closer", closer_opts)
@@ -562,8 +586,8 @@ def modulo_perfil(df: pd.DataFrame):
 
     def rfconv(col, label):
         """Reuniões | Fechados | Conv R→F% por dimensão"""
-        r = df_reunioes.groupby(col).size().reset_index(name="Reuniões")
-        f = df_fechados.groupby(col).size().reset_index(name="Fechados")
+        r = df_reunioes.groupby(col, observed=True).size().reset_index(name="Reuniões")
+        f = df_fechados.groupby(col, observed=True).size().reset_index(name="Fechados")
         tb = r.merge(f, on=col, how="outer").fillna(0)
         tb["Reuniões"] = tb["Reuniões"].astype(int)
         tb["Fechados"] = tb["Fechados"].astype(int)
@@ -619,8 +643,8 @@ def modulo_comparacao(df: pd.DataFrame):
 
     with aba_geral:
         secao("Reuniões e Fechados por Mês")
-        gR = df_reunioes.groupby("mes_reuniao_dt").size().reset_index(name="Reuniões")
-        gF = df_fechados.groupby("mes_fechamento_dt").size().reset_index(name="Fechados")
+        gR = df_reunioes.groupby("mes_reuniao_dt", observed=True).size().reset_index(name="Reuniões")
+        gF = df_fechados.groupby("mes_fechamento_dt", observed=True).size().reset_index(name="Fechados")
 
         # Tabela unificada
         tabela = gR.rename(columns={"mes_reuniao_dt": "Mês"}).merge(
@@ -654,7 +678,7 @@ def modulo_comparacao(df: pd.DataFrame):
     with aba_closer:
         secao("Fechados por Mês × Closer")
         if "mes_fechamento_dt" in df_fechados.columns:
-            evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            evo = df_fechados.groupby([COL_CLOSER, "mes_fechamento_dt"], observed=True).size().reset_index(name="Fechados")
             pivot = evo.pivot_table(index=COL_CLOSER, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
             fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_CLOSER,
                          barmode="group", color_discrete_sequence=COLORS, text_auto=True)
@@ -667,7 +691,7 @@ def modulo_comparacao(df: pd.DataFrame):
     with aba_jornada:
         secao("Fechados por Mês × Jornada")
         if "mes_fechamento_dt" in df_fechados.columns:
-            evo = df_fechados.groupby([COL_JORNADA, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            evo = df_fechados.groupby([COL_JORNADA, "mes_fechamento_dt"], observed=True).size().reset_index(name="Fechados")
             pivot = evo.pivot_table(index=COL_JORNADA, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
             fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_JORNADA,
                          barmode="group", color_discrete_sequence=COLORS)
@@ -680,7 +704,7 @@ def modulo_comparacao(df: pd.DataFrame):
     with aba_tipo:
         secao("Fechados por Mês × Tipo de Lead")
         if "mes_fechamento_dt" in df_fechados.columns:
-            evo = df_fechados.groupby([COL_TIPO, "mes_fechamento_dt"]).size().reset_index(name="Fechados")
+            evo = df_fechados.groupby([COL_TIPO, "mes_fechamento_dt"], observed=True).size().reset_index(name="Fechados")
             pivot = evo.pivot_table(index=COL_TIPO, columns="mes_fechamento_dt", values="Fechados", fill_value=0)
             fig = px.bar(evo, x="mes_fechamento_dt", y="Fechados", color=COL_TIPO,
                          barmode="group", color_discrete_sequence=COLORS)
@@ -730,7 +754,7 @@ def modulo_perdidos(df: pd.DataFrame):
         st.plotly_chart(fig2, width='stretch')
 
     secao("Origem × Motivo de Perda")
-    cross = df_perdidos.groupby([COL_ORIGEM, COL_MOTIVO_PERDA]).size().reset_index(name="Qtd")
+    cross = df_perdidos.groupby([COL_ORIGEM, COL_MOTIVO_PERDA], observed=True).size().reset_index(name="Qtd")
     cross = cross.sort_values("Qtd", ascending=False).head(30)
     fig3 = px.bar(cross, x="Qtd", y=COL_ORIGEM, color=COL_MOTIVO_PERDA,
                   orientation="h", color_discrete_sequence=COLORS, barmode="stack")
@@ -776,7 +800,7 @@ def modulo_receita(df: pd.DataFrame):
     # ── Evolução Mensal ──────────────────────────────────────────────────────
     secao("Evolução Mensal")
     if "mes_fechamento_dt" in dff.columns:
-        mensal = dff.groupby("mes_fechamento_dt").agg(
+        mensal = dff.groupby("mes_fechamento_dt", observed=True).agg(
             Receita=(COL_VALOR, "sum"),
             Contratos=(COL_ID, "count"),
         ).reset_index().sort_values("mes_fechamento_dt")
@@ -814,7 +838,7 @@ def modulo_receita(df: pd.DataFrame):
         return f"R$ {int(val):,}".replace(",", ".")
 
     def dim_table(col, label):
-        grp = dff.groupby(col).agg(
+        grp = dff.groupby(col, observed=True).agg(
             Receita=(COL_VALOR, "sum"),
             Contratos=(COL_ID, "count"),
         ).reset_index().sort_values("Receita", ascending=False)
@@ -856,7 +880,7 @@ def modulo_receita(df: pd.DataFrame):
         exp = dff_prod.explode("produto_list")
         exp["produto_list"] = exp["produto_list"].str.strip()
         exp = exp[exp["produto_list"] != ""]
-        grp_prod = exp.groupby("produto_list").agg(
+        grp_prod = exp.groupby("produto_list", observed=True).agg(
             Receita=(COL_VALOR, "sum"),
             Contratos=(COL_ID, "count"),
         ).reset_index().sort_values("Receita", ascending=False)
