@@ -350,32 +350,30 @@ def secao(txt):
 # ─────────────────────────────────────────────
 def modulo_geral(df: pd.DataFrame):
     st.title("📊 Dashboard Geral")
-    df_leads, df_reunioes, df_fechados, df_perdidos = render_filtros(df)
+    _, df_reunioes, df_fechados, df_perdidos = render_filtros(df)
 
-    n_leads    = len(df_leads)
     n_reunioes = len(df_reunioes)
     n_fechados = len(df_fechados)
     n_perdidos = len(df_perdidos)
 
     secao("Funil de Conversão")
-    st.caption("ℹ️ Leads = período de criação · Reuniões = período de reunião · Fechados = período de fechamento")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: metric_card("Total de Leads",        f"{n_leads:,}")
-    with c2: metric_card("Com Reunião",            f"{n_reunioes:,}", pct(n_reunioes, n_leads))
-    with c3: metric_card("Fechados",               f"{n_fechados:,}", pct(n_fechados, n_leads))
-    with c4: metric_card("Conv. Reunião→Fechado",  pct(n_fechados, n_reunioes))
-    with c5: metric_card("Perdidos (pós-reunião)", f"{n_perdidos:,}")
+    st.caption("Reuniões = período de reunião · Fechados = período de fechamento")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: metric_card("Reuniões Ocorridas",    f"{n_reunioes:,}")
+    with c2: metric_card("Fechados",               f"{n_fechados:,}", pct(n_fechados, n_reunioes))
+    with c3: metric_card("Conv. Reunião→Fechado",  pct(n_fechados, n_reunioes))
+    with c4: metric_card("Perdidos (pós-reunião)", f"{n_perdidos:,}", pct(n_perdidos, n_reunioes))
 
     secao("Funil Visual")
     fig_funil = go.Figure(go.Funnel(
-        y=["Leads", "Reuniões", "Fechados"],
-        x=[n_leads, n_reunioes, n_fechados],
-        marker_color=[COLORS[0], COLORS[1], COLORS[2]],
+        y=["Reuniões", "Fechados"],
+        x=[n_reunioes, n_fechados],
+        marker_color=[COLORS[1], COLORS[2]],
         textinfo="value+percent initial",
     ))
     fig_funil.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#EAEAEA", height=320, margin=dict(l=0, r=0, t=10, b=0)
+        font_color="#EAEAEA", height=260, margin=dict(l=0, r=0, t=10, b=0)
     )
     st.plotly_chart(fig_funil, width='stretch')
 
