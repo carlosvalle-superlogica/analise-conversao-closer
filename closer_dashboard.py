@@ -93,7 +93,7 @@ COL_CRIACAO      = "Data de criação"
 COL_REUNIAO      = "[IS/Closer] Reunião Ocorrida"
 COL_FECHAMENTO   = 'Date entered "Fechado ([Comercial] Aquisições)"'
 COL_PAGO         = 'Date entered "Pago ([Comercial] Aquisições)"'
-COL_DATA_FECH    = "Data de fechamento"   # coluna nativa — usada como mF
+COL_DATA_FECH    = "Data de fechamento"   # coluna nativa (backup)
 COL_PRODUTOS     = "[IS/Closer] Produtos Fechados"
 COL_VALOR        = "Valor"
 COL_INTERESSE    = "[IS/SDR] Produtos de Interesse do Lead"
@@ -150,17 +150,20 @@ def load_data(path: str) -> pd.DataFrame:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     # Flags base
-    df["is_fechado"] = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_DATA_FECH].notna()
+    # is_fechado: Fechado ou Pago com Date entered "Fechado" preenchida
+    df["is_fechado"] = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_FECHAMENTO].notna()
+    # is_pago: apenas etapa Pago com Date entered "Pago" (para Receita)
+    df["is_pago"]    = (df[COL_ETAPA] == "Pago") & df[COL_PAGO].notna()
     df["is_reuniao"] = df[COL_REUNIAO].notna()
-    df["is_perdido"] = df[COL_ETAPA] == "Perdidos"
+    df["is_perdido"] = (df[COL_ETAPA] == "Perdidos") & df["is_reuniao"]
 
     if COL_CRIACAO in df.columns:
         df["ano_criacao"]    = df[COL_CRIACAO].dt.year.astype("Int16")
         df["mes_criacao_dt"] = df[COL_CRIACAO].dt.strftime("%Y-%m")
     if COL_REUNIAO in df.columns:
         df["mes_reuniao_dt"] = df[COL_REUNIAO].dt.strftime("%Y-%m")
-    if COL_DATA_FECH in df.columns:
-        df["mes_fechamento_dt"] = df[COL_DATA_FECH].dt.strftime("%Y-%m")
+    if COL_FECHAMENTO in df.columns:
+        df["mes_fechamento_dt"] = df[COL_FECHAMENTO].dt.strftime("%Y-%m")
 
     return df
 
@@ -240,7 +243,7 @@ def render_filtros(df: pd.DataFrame):
             r_R = date_range(COL_REUNIAO, "Periodo de Reuniao", "periodo_reuniao")
         with dc2:
             st.caption("Data de Fechamento")
-            r_F = date_range(COL_DATA_FECH, "Periodo de Fechamento", "periodo_fechamento")
+            r_F = date_range(COL_FECHAMENTO, "Periodo de Fechamento", "periodo_fechamento")
 
         st.markdown("---")
 
@@ -341,14 +344,14 @@ def render_filtros(df: pd.DataFrame):
 
     m_fech = df["is_fechado"].copy()
     if r_F[0] and r_F[1]:
-        m_fech &= df[COL_DATA_FECH].dt.date.between(r_F[0], r_F[1])
+        m_fech &= df[COL_FECHAMENTO].dt.date.between(r_F[0], r_F[1])
     if etapa_sel == "Fechado":
         m_fech &= df[COL_ETAPA] == "Fechado"
     elif etapa_sel == "Pago":
         m_fech &= df[COL_ETAPA] == "Pago"
     df_fechados = df[m_fech & mask_dim(df)].copy()
 
-    m_perd = df["is_perdido"] & df["is_reuniao"]
+    m_perd = df["is_perdido"]  # is_perdido ja inclui filtro de reuniao ocorrida
     if r_R[0] and r_R[1]:
         m_perd &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
     df_perdidos = df[m_perd & mask_dim(df)].copy()
@@ -783,7 +786,8 @@ def modulo_receita(df: pd.DataFrame):
         st.warning("Coluna 'Valor' não encontrada no CSV.")
         return
 
-    dff = df_fechados.copy()
+    # Receita: apenas registros com etapa Pago (Date entered Pago como referência)
+    dff = df_fechados[df_fechados["is_pago"] == True].copy() if "is_pago" in df_fechados.columns else df_fechados.copy()
     dff[COL_VALOR] = pd.to_numeric(dff[COL_VALOR], errors="coerce").fillna(0)
 
     receita_total = dff[COL_VALOR].sum()
