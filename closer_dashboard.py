@@ -194,6 +194,7 @@ with st.sidebar:
         "🧩 Perfil do Lead",
         "📈 Comparação Mês a Mês",
         "❌ Perdidos (pós-reunião)",
+        "🚨 Alerta Pós-Fechamento",
     ]
     if st.session_state.get("role") == "operador":
         modulos = [m for m in modulos if m != "🏆 Performance de Closers"]
@@ -922,6 +923,101 @@ def modulo_receita(df: pd.DataFrame):
 
 
 # ─────────────────────────────────────────────
+# MÓDULO: ALERTA PÓS-FECHAMENTO
+# Quem entrou em Fechado e saiu (virou Perdido)
+# ─────────────────────────────────────────────
+def modulo_alerta(df: pd.DataFrame):
+    st.title("🚨 Alerta Pós-Fechamento")
+    _, _, df_fechados, _ = render_filtros(df)
+
+    st.caption("Todos que tiveram 'Date entered Fechado' preenchida no período — independente da etapa atual.")
+
+    # Base: todos que entraram em Fechado no período (já filtrado por mF em df_fechados)
+    total_entraram = len(df_fechados)
+
+    # Permanecem: etapa atual Fechado ou Pago
+    permaneceram   = df_fechados[df_fechados[COL_ETAPA].isin(["Fechado", "Pago"])]
+    # Saíram: etapa atual != Fechado e != Pago (viraram Perdidos ou outro)
+    saiu           = df_fechados[~df_fechados[COL_ETAPA].isin(["Fechado", "Pago"])]
+
+    n_total       = total_entraram
+    n_permaneceram = len(permaneceram)
+    n_saiu        = len(saiu)
+    pct_saiu      = pct(n_saiu, n_total)
+
+    # ── KPIs ──────────────────────────────────────────────────────────────
+    secao("Visão Geral")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: metric_card("Entraram em Fechado",    f"{n_total:,}")
+    with c2: metric_card("Permanecem (Fechado/Pago)", f"{n_permaneceram:,}", pct(n_permaneceram, n_total))
+    with c3: metric_card("🚨 Saíram após Fechar",  f"{n_saiu:,}", pct_saiu)
+    with c4: metric_card("Taxa de Retenção",        pct(n_permaneceram, n_total))
+
+    if n_saiu == 0:
+        st.success("Nenhum registro saiu da etapa Fechado/Pago no período selecionado.")
+        return
+
+    # ── Motivos ────────────────────────────────────────────────────────────
+    secao("Motivos de Saída")
+    col_a, col_b = st.columns([1, 1.4])
+    motivos = saiu[COL_MOTIVO_PERDA].value_counts().reset_index()
+    motivos.columns = ["Motivo", "Qtd"]
+    motivos["% do Total"] = pd.to_numeric(
+        motivos["Qtd"] / n_saiu * 100, errors="coerce"
+    ).fillna(0).round(1).astype(str) + "%"
+
+    with col_a:
+        st.dataframe(motivos, hide_index=True, width='stretch',
+                     height=min(len(motivos)*38+50, 500))
+    with col_b:
+        fig = px.bar(motivos, x="Qtd", y="Motivo", orientation="h",
+                     color_discrete_sequence=[COLORS[5]], text="Qtd")
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#EAEAEA", height=min(len(motivos)*45+60, 500),
+            margin=dict(l=0, r=0, t=10, b=0), yaxis_title="")
+        st.plotly_chart(fig, width='stretch')
+
+    # ── Por Closer ─────────────────────────────────────────────────────────
+    secao("Saídas por Closer")
+    col_c, col_d = st.columns([1, 1.4])
+    por_closer = saiu.groupby(COL_CLOSER, observed=True).agg(
+        Saídas=(COL_ID, "count"),
+    ).reset_index().sort_values("Saídas", ascending=False)
+
+    # Adiciona total fechados por closer para calcular % de saída
+    total_por_closer = df_fechados.groupby(COL_CLOSER, observed=True).size().reset_index(name="Fechados")
+    por_closer = por_closer.merge(total_por_closer, on=COL_CLOSER, how="left").fillna(0)
+    por_closer["% Saída"] = pd.to_numeric(
+        por_closer["Saídas"] / por_closer["Fechados"].replace(0, float("nan")) * 100,
+        errors="coerce").fillna(0).round(1).astype(str) + "%"
+    por_closer = por_closer.rename(columns={COL_CLOSER: "Closer"})
+
+    with col_c:
+        st.dataframe(por_closer, hide_index=True, width='stretch',
+                     height=min(len(por_closer)*38+50, 600))
+    with col_d:
+        fig2 = px.bar(por_closer, x="Saídas", y="Closer", orientation="h",
+                      color_discrete_sequence=[COLORS[5]], text="Saídas")
+        fig2.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#EAEAEA", height=min(len(por_closer)*45+60, 600),
+            margin=dict(l=0, r=0, t=10, b=0), yaxis_title="")
+        st.plotly_chart(fig2, width='stretch')
+
+    # ── Auditoria individual ───────────────────────────────────────────────
+    secao("Registros para Investigação")
+    cols_show = [c for c in [
+        COL_NOME, COL_CLOSER, COL_FECHAMENTO, COL_ETAPA,
+        COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA, COL_ORIGEM
+    ] if c in saiu.columns]
+    audit = saiu[cols_show].copy()
+    audit[COL_FECHAMENTO] = audit[COL_FECHAMENTO].dt.strftime("%Y-%m-%d")
+    st.dataframe(audit.reset_index(drop=True), hide_index=True, width='stretch',
+                 height=min(len(audit)*38+50, 800))
+
+
+# ─────────────────────────────────────────────
 # ROTEAMENTO
 # ─────────────────────────────────────────────
 if "df" not in st.session_state:
@@ -937,3 +1033,4 @@ elif modulo == "📦 Produtos Fechados":          modulo_produtos(df)
 elif modulo == "🧩 Perfil do Lead":             modulo_perfil(df)
 elif modulo == "📈 Comparação Mês a Mês":       modulo_comparacao(df)
 elif modulo == "❌ Perdidos (pós-reunião)":     modulo_perdidos(df)
+elif modulo == "🚨 Alerta Pós-Fechamento":      modulo_alerta(df)
