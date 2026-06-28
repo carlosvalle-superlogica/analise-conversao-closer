@@ -1125,24 +1125,23 @@ def modulo_kenlo(df: pd.DataFrame):
     st.dataframe(pd.DataFrame(var_rows), hide_index=True, width='stretch',
                  height=3*38+10)
 
-    # ── Helper: tabela ano a ano por dimensão ────────────────────────────
-    def tabela_por_dim(col, titulo):
-        secao(titulo)
+    # ── Helper: tabela ano a ano por dimensão + filtro kenlo ────────────
+    def tabela_por_dim(col, titulo, kenlo_flag):
         valores = sorted(df[col].dropna().unique().tolist())
-        # Remove multi-valor raro (ex: "CRM; ERP")
         valores = [v for v in valores if ";" not in str(v)]
+        mask_kenlo = df["is_kenlo"] == kenlo_flag
 
         rows = []
         for val in valores:
             mask_val = df[col].astype(object).fillna("").apply(
-                lambda x: val in [p.strip() for p in x.split(";")]
+                lambda x, v=val: v in [p.strip() for p in x.split(";")]
             )
             row = {"Dimensão": val}
             prev_conv = None
             for ano in anos:
-                ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & mask_val].shape[0]
-                fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & mask_val].shape[0]
-                conv = round(fech / ro * 100, 2) if ro > 0 else 0
+                ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask_val & mask_kenlo].shape[0]
+                fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask_val & mask_kenlo].shape[0]
+                conv = round(fech/ro*100, 2) if ro > 0 else 0
                 row[f"RO {ano}"]   = ro
                 row[f"Fech {ano}"] = fech
                 row[f"Conv {ano}"] = f"{conv:.2f}%"
@@ -1152,20 +1151,21 @@ def modulo_kenlo(df: pd.DataFrame):
                 prev_conv = conv
             rows.append(row)
 
+        secao(titulo)
         tb = pd.DataFrame(rows)
         st.dataframe(tb, hide_index=True, width='stretch',
                      height=min((len(tb)+1)*38+10, 600))
 
-        # Gráfico de conversão ano a ano
+        # Gráfico linha conversão
         fig_rows = []
         for val in valores:
             mask_val = df[col].astype(object).fillna("").apply(
-                lambda x: val in [p.strip() for p in x.split(";")]
+                lambda x, v=val: v in [p.strip() for p in x.split(";")]
             )
             for ano in anos:
-                ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & mask_val].shape[0]
-                fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & mask_val].shape[0]
-                conv = round(fech / ro * 100, 2) if ro > 0 else 0
+                ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask_val & mask_kenlo].shape[0]
+                fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask_val & mask_kenlo].shape[0]
+                conv = round(fech/ro*100, 2) if ro > 0 else 0
                 fig_rows.append({"Dimensão": val, "Ano": str(ano), "Conv%": conv})
 
         df_fig = pd.DataFrame(fig_rows)
@@ -1173,15 +1173,17 @@ def modulo_kenlo(df: pd.DataFrame):
                       markers=True, color_discrete_sequence=COLORS)
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#EAEAEA", height=400,
+            font_color="#EAEAEA", height=360,
             margin=dict(l=0, r=0, t=10, b=0),
             yaxis_title="Conv R→F (%)",
             legend=dict(bgcolor="rgba(0,0,0,0)")
         )
         st.plotly_chart(fig, width='stretch')
 
-    tabela_por_dim(COL_TIPO,    "Por Tipo de Lead — ano a ano")
-    tabela_por_dim(COL_JORNADA, "Por Jornada do Lead — ano a ano")
+    tabela_por_dim(COL_TIPO,    "Tipo de Lead — Kenlo (Ingaia)",  True)
+    tabela_por_dim(COL_TIPO,    "Tipo de Lead — NÃO é Kenlo",     False)
+    tabela_por_dim(COL_JORNADA, "Jornada do Lead — Kenlo (Ingaia)", True)
+    tabela_por_dim(COL_JORNADA, "Jornada do Lead — NÃO é Kenlo",   False)
 
 
 # ─────────────────────────────────────────────
