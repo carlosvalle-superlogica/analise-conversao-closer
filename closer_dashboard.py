@@ -196,6 +196,7 @@ with st.sidebar:
         "❌ Perdidos (pós-reunião)",
         "🚨 Alerta Pós-Fechamento",
         "🔄 Kenlo vs Não-Kenlo",
+        "🌀 Funil Completo",
     ]
     if st.session_state.get("role") == "operador":
         modulos = [m for m in modulos if m != "🏆 Performance de Closers"]
@@ -1186,6 +1187,148 @@ def modulo_kenlo(df: pd.DataFrame):
     tabela_por_dim(COL_JORNADA, "Jornada do Lead — NÃO é Kenlo",   False)
 
 
+
+# ─────────────────────────────────────────────
+# MÓDULO: FUNIL COMPLETO
+# Lead → Contato → Agendamento → Reunião → Fechado
+# Cada etapa usa sua própria data. Kenlo vs Não-Kenlo. Ano a ano.
+# ─────────────────────────────────────────────
+def modulo_funil_completo(df: pd.DataFrame):
+    st.title("🌀 Funil Completo")
+    st.caption("Cada etapa usa sua própria data · Kenlo = ERP contém exatamente 'Kenlo (Ingaia)'")
+
+    COL_CRIACAO = "Data de criação"
+    COL_CONTATO = "Contato Realizado"
+    COL_AGEND   = "[IS/SDR] Data do Agendamento"
+
+    df = df.copy()
+    df["is_kenlo"] = df[COL_ERP].astype(object).fillna("").apply(
+        lambda x: "Kenlo (Ingaia)" in [p.strip() for p in x.split(";")]
+    )
+
+    ETAPAS = [
+        ("Lead",       COL_CRIACAO),
+        ("Contato",    COL_CONTATO),
+        ("Agendamento",COL_AGEND),
+        ("Reunião",    COL_REUNIAO),
+        ("Fechado",    COL_FECHAMENTO),
+    ]
+    ANOS = [2024, 2025, 2026]
+
+    def get_val(col, ano, kenlo_flag):
+        serie = df[col].dt.year
+        return df[(serie == ano) & (df["is_kenlo"] == kenlo_flag)].shape[0]
+
+    def conv_pct(a, b):
+        return round(a / b * 100, 1) if b > 0 else 0
+
+    def build_funil_df(kenlo_flag):
+        """Retorna DataFrame com etapas nas linhas e anos nas colunas + variação"""
+        rows = []
+        vals = {}
+        for label, col in ETAPAS:
+            row = {"Etapa": label}
+            for ano in ANOS:
+                v = get_val(col, ano, kenlo_flag)
+                vals[(label, ano)] = v
+                row[f"{ano}"] = v
+            rows.append(row)
+
+        # Linha de conversão entre cada par de etapas
+        conv_rows = []
+        for i in range(1, len(ETAPAS)):
+            prev_lbl = ETAPAS[i-1][0]
+            curr_lbl = ETAPAS[i][0]
+            row = {"Etapa": f"↳ Conv {prev_lbl}→{curr_lbl}"}
+            prev_conv = None
+            for ano in ANOS:
+                c = conv_pct(vals[(curr_lbl, ano)], vals[(prev_lbl, ano)])
+                row[f"{ano}"] = f"{c:.1f}%"
+                if prev_conv is not None:
+                    delta = c - prev_conv
+                    row[f"Var {ANOS[ANOS.index(ano)-1]}→{ano}"] = f"{delta:+.1f}pp"
+                prev_conv = c
+            conv_rows.append(row)
+
+        # Intercalar etapas e conversões
+        result = []
+        for i, etapa_row in enumerate(rows):
+            # Adiciona variação de volume entre anos
+            etapa_row_ext = dict(etapa_row)
+            prev_v = None
+            for ano in ANOS:
+                v = etapa_row[f"{ano}"]
+                if prev_v is not None:
+                    delta = v - prev_v
+                    sign = "+" if delta >= 0 else ""
+                    etapa_row_ext[f"Var {ANOS[ANOS.index(ano)-1]}→{ano}"] = f"{sign}{delta:,}"
+                prev_v = v
+            result.append(etapa_row_ext)
+            if i < len(conv_rows):
+                result.append(conv_rows[i])
+
+        return pd.DataFrame(result)
+
+    # ── Tabelas Kenlo e Não-Kenlo lado a lado ────────────────────────────
+    c1, c2 = st.columns(2)
+    with c1:
+        secao("Kenlo (Ingaia)")
+        tb_k = build_funil_df(True)
+        st.dataframe(tb_k, hide_index=True, width='stretch',
+                     height=(len(tb_k)+1)*38+10)
+    with c2:
+        secao("NÃO é Kenlo")
+        tb_nk = build_funil_df(False)
+        st.dataframe(tb_nk, hide_index=True, width='stretch',
+                     height=(len(tb_nk)+1)*38+10)
+
+    # ── Gráfico: conversão Reunião→Fechado ano a ano (principal KPI) ─────
+    secao("Conversão Reunião → Fechado por Ano")
+    fig_rows = []
+    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+        prev_conv = None
+        for ano in ANOS:
+            ro   = get_val(COL_REUNIAO,    ano, kflag)
+            fech = get_val(COL_FECHAMENTO, ano, kflag)
+            conv = conv_pct(fech, ro)
+            fig_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+
+    df_fig = pd.DataFrame(fig_rows)
+    fig = px.bar(df_fig, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                 color_discrete_sequence=[COLORS[2], COLORS[1]],
+                 text=df_fig["Conv%"].apply(lambda x: f"{x:.1f}%"))
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#EAEAEA", height=380,
+        margin=dict(l=0, r=0, t=30, b=0),
+        yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
+    )
+    st.plotly_chart(fig, width='stretch')
+
+    # ── Gráfico: volume por etapa e ano (Kenlo) ──────────────────────────
+    secao("Volume por Etapa — Kenlo vs Não-Kenlo (2024 · 2025 · 2026)")
+    for kflag, gtitle in [(True, "Kenlo (Ingaia)"), (False, "NÃO é Kenlo")]:
+        fig_rows2 = []
+        for label, col in ETAPAS:
+            for ano in ANOS:
+                fig_rows2.append({"Etapa": label, "Ano": str(ano),
+                                   "Volume": get_val(col, ano, kflag)})
+        df_fig2 = pd.DataFrame(fig_rows2)
+        fig2 = px.bar(df_fig2, x="Etapa", y="Volume", color="Ano",
+                      barmode="group", title=gtitle,
+                      color_discrete_sequence=[COLORS[0], COLORS[1], COLORS[2]],
+                      text="Volume")
+        fig2.update_traces(textposition="outside")
+        fig2.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#EAEAEA", height=400,
+            margin=dict(l=0, r=0, t=40, b=0),
+            legend=dict(bgcolor="rgba(0,0,0,0)")
+        )
+        st.plotly_chart(fig2, width='stretch')
+
+
 # ─────────────────────────────────────────────
 # ROTEAMENTO
 # ─────────────────────────────────────────────
@@ -1204,3 +1347,4 @@ elif modulo == "📈 Comparação Mês a Mês":       modulo_comparacao(df)
 elif modulo == "❌ Perdidos (pós-reunião)":     modulo_perdidos(df)
 elif modulo == "🚨 Alerta Pós-Fechamento":      modulo_alerta(df)
 elif modulo == "🔄 Kenlo vs Não-Kenlo":         modulo_kenlo(df)
+elif modulo == "🌀 Funil Completo":              modulo_funil_completo(df)
