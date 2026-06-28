@@ -195,6 +195,7 @@ with st.sidebar:
         "📈 Comparação Mês a Mês",
         "❌ Perdidos (pós-reunião)",
         "🚨 Alerta Pós-Fechamento",
+        "🔄 Kenlo vs Não-Kenlo",
     ]
     if st.session_state.get("role") == "operador":
         modulos = [m for m in modulos if m != "🏆 Performance de Closers"]
@@ -1030,6 +1031,102 @@ def modulo_alerta(df: pd.DataFrame):
 
 
 # ─────────────────────────────────────────────
+# MÓDULO: KENLO vs NÃO-KENLO
+# Lógica independente dos filtros globais:
+#   RO  → agrupado pelo ANO da Reunião Ocorrida
+#   Fech → agrupado pelo ANO do Date entered Fechado
+#   Kenlo = valor exato "Kenlo (Ingaia)" no campo ERP (split por ;)
+# ─────────────────────────────────────────────
+def modulo_kenlo(df: pd.DataFrame):
+    st.title("🔄 Kenlo vs Não-Kenlo")
+    st.caption("Reuniões = agrupadas pelo ano da Reunião Ocorrida · Fechados = agrupados pelo ano do Date entered Fechado")
+    st.caption("Kenlo = ERP que utiliza contém exatamente 'Kenlo (Ingaia)'")
+
+    # Flags (independente dos filtros globais)
+    df = df.copy()
+    df["is_kenlo"] = df[COL_ERP].astype(object).fillna("").apply(
+        lambda x: "Kenlo (Ingaia)" in [p.strip() for p in x.split(";")]
+    )
+    df["ano_reuniao"] = df[COL_REUNIAO].dt.year
+    df["ano_fechado"] = df[COL_FECHAMENTO].dt.year
+
+    anos = [2024, 2025, 2026]
+
+    def build_table(kenlo_flag, label):
+        rows = []
+        for ano in anos:
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kenlo_flag)].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kenlo_flag)].shape[0]
+            conv = round(fech / ro * 100, 2) if ro > 0 else 0
+            rows.append({"Ano": str(ano), "Reuniões Ocorridas": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"})
+        # Linha total
+        ro_t   = sum(r["Reuniões Ocorridas"] for r in rows)
+        fech_t = sum(r["Fechados"] for r in rows)
+        conv_t = round(fech_t / ro_t * 100, 2) if ro_t > 0 else 0
+        rows.append({"Ano": "TOTAL", "Reuniões Ocorridas": ro_t, "Fechados": fech_t, "Conv R→F": f"{conv_t:.2f}%"})
+        return pd.DataFrame(rows)
+
+    # ── Tabelas lado a lado ──────────────────────────────────────────────
+    c1, c2 = st.columns(2)
+
+    with c1:
+        secao("ERP Utiliza: Kenlo (Ingaia)")
+        tb_k = build_table(True, "Kenlo")
+        st.dataframe(tb_k, hide_index=True, width='stretch',
+                     height=(len(tb_k)+1)*38+10)
+
+    with c2:
+        secao("ERP Utiliza: NÃO é Kenlo")
+        tb_nk = build_table(False, "Nao Kenlo")
+        st.dataframe(tb_nk, hide_index=True, width='stretch',
+                     height=(len(tb_nk)+1)*38+10)
+
+    # ── Gráfico de conversão comparativo ────────────────────────────────
+    secao("Conversão R→F: Kenlo vs Não-Kenlo por Ano")
+    fig_data = []
+    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+        for ano in anos:
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kflag)].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kflag)].shape[0]
+            conv = round(fech / ro * 100, 2) if ro > 0 else 0
+            fig_data.append({"Ano": str(ano), "Grupo": grupo, "Conv%": conv})
+
+    df_fig = pd.DataFrame(fig_data)
+    fig = px.bar(df_fig, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                 color_discrete_sequence=[COLORS[2], COLORS[1]],
+                 text=df_fig["Conv%"].apply(lambda x: f"{x:.2f}%"))
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#EAEAEA", height=380,
+        margin=dict(l=0, r=0, t=30, b=0),
+        yaxis_title="Conv R→F (%)", xaxis_title="Ano",
+        legend=dict(bgcolor="rgba(0,0,0,0)")
+    )
+    st.plotly_chart(fig, width='stretch')
+
+    # ── Variação ano a ano ───────────────────────────────────────────────
+    secao("Variação Ano a Ano (pp = pontos percentuais)")
+    var_rows = []
+    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+        convs = {}
+        for ano in anos:
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kflag)].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kflag)].shape[0]
+            convs[ano] = round(fech / ro * 100, 2) if ro > 0 else 0
+        var_rows.append({
+            "Grupo":         grupo,
+            "Conv 2024":     f"{convs[2024]:.2f}%",
+            "Conv 2025":     f"{convs[2025]:.2f}%",
+            "Var 24→25":     f"{convs[2025]-convs[2024]:+.2f}pp",
+            "Conv 2026":     f"{convs[2026]:.2f}%",
+            "Var 25→26":     f"{convs[2026]-convs[2025]:+.2f}pp",
+        })
+    st.dataframe(pd.DataFrame(var_rows), hide_index=True, width='stretch',
+                 height=3*38+10)
+
+
+# ─────────────────────────────────────────────
 # ROTEAMENTO
 # ─────────────────────────────────────────────
 if "df" not in st.session_state:
@@ -1046,3 +1143,4 @@ elif modulo == "🧩 Perfil do Lead":             modulo_perfil(df)
 elif modulo == "📈 Comparação Mês a Mês":       modulo_comparacao(df)
 elif modulo == "❌ Perdidos (pós-reunião)":     modulo_perdidos(df)
 elif modulo == "🚨 Alerta Pós-Fechamento":      modulo_alerta(df)
+elif modulo == "🔄 Kenlo vs Não-Kenlo":         modulo_kenlo(df)
