@@ -303,19 +303,27 @@ def render_filtros(df: pd.DataFrame):
             tag_sel = st.multiselect("TAG Comercial", tag_todos,
                                      default=[], key="tag_sel", placeholder="Todos (sem filtro)")
 
+    # Conjuntos completos de cada dimensão (para detectar filtro real vs "todos selecionados")
+    _all_closers = set(df[COL_CLOSER].dropna().unique().tolist())
+    _all_sdrs    = set(df[COL_SDR].dropna().unique().tolist())
+    _all_origens = set(df[COL_ORIGEM].dropna().unique().tolist())
+    _all_jornadas= set(df[COL_JORNADA].dropna().unique().tolist())
+    _all_tipos   = set(df[COL_TIPO].dropna().unique().tolist())
+
     def mask_dim(d):
         m = pd.Series([True] * len(d), index=d.index)
         if etapa_sel != "Todas":
             m &= d[COL_ETAPA] == etapa_sel
-        if closer_sel:
+        # Só filtra se o usuário REMOVEU algum valor (não é seleção completa)
+        if closer_sel and set(closer_sel) != _all_closers:
             m &= d[COL_CLOSER].isin(closer_sel)
-        if sdr_sel:
+        if sdr_sel and set(sdr_sel) != _all_sdrs:
             m &= d[COL_SDR].isin(sdr_sel)
-        if origem_sel:
+        if origem_sel and set(origem_sel) != _all_origens:
             m &= d[COL_ORIGEM].isin(origem_sel)
-        if jornada_sel:
+        if jornada_sel and set(jornada_sel) != _all_jornadas:
             m &= d[COL_JORNADA].isin(jornada_sel)
-        if tipo_sel:
+        if tipo_sel and set(tipo_sel) != _all_tipos:
             m &= d[COL_TIPO].isin(tipo_sel)
         if produto_sel:
             m &= d[COL_PRODUTOS].astype(object).fillna("").apply(
