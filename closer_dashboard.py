@@ -320,9 +320,13 @@ def render_filtros(df: pd.DataFrame):
         if sdr_sel and set(sdr_sel) != _all_sdrs:
             m &= d[COL_SDR].isin(sdr_sel)
         if origem_sel and set(origem_sel) != _all_origens:
-            m &= d[COL_ORIGEM].isin(origem_sel)
+            m &= d[COL_ORIGEM].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in origem_sel)
+            )
         if jornada_sel and set(jornada_sel) != _all_jornadas:
-            m &= d[COL_JORNADA].isin(jornada_sel)
+            m &= d[COL_JORNADA].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in jornada_sel)
+            )
         if tipo_sel and set(tipo_sel) != _all_tipos:
             m &= d[COL_TIPO].isin(tipo_sel)
         if produto_sel:
