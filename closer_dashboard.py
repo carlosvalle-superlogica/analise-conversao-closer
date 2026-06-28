@@ -150,8 +150,9 @@ def load_data(path: str) -> pd.DataFrame:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     # Flags base
-    # is_fechado: Fechado ou Pago com Date entered "Fechado" preenchida
-    df["is_fechado"] = df[COL_ETAPA].isin(ETAPAS_FECHADO) & df[COL_FECHAMENTO].notna()
+    # is_fechado: qualquer registro com Date entered "Fechado" preenchida (4.972)
+    # Igual ao filtro do HubSpot — independente da etapa atual
+    df["is_fechado"] = df[COL_FECHAMENTO].notna()
     # is_pago: apenas etapa Pago com Date entered "Pago" (para Receita)
     df["is_pago"]    = (df[COL_ETAPA] == "Pago") & df[COL_PAGO].notna()
     df["is_reuniao"] = df[COL_REUNIAO].notna()
