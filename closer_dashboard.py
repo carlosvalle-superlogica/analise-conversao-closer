@@ -1260,31 +1260,33 @@ def modulo_kenlo(df: pd.DataFrame):
 
     # ── Filtro dinâmico por Itens de Linha ───────────────────────────────
     secao("Filtro Livre — Itens de Linha")
-    st.caption("Digite um termo para filtrar negócios cujos itens de linha CONTÊM esse texto")
+    st.caption("Digite um ou mais termos separados por vírgula. O filtro considera qualquer item de linha que CONTENHA algum dos termos.")
 
     if COL_LINE_ITEM in df.columns:
         col_inp, col_ex = st.columns([2, 1])
         with col_inp:
-            termo_busca = st.text_input(
-                "Termo de busca (ex: CRM, ERP, Owli, White Label...)",
+            termos_input = st.text_input(
+                "Termos de busca (separe por vírgula)",
                 value="",
                 key="kenlo_termo_busca",
-                placeholder="Digite parte do nome do item de linha..."
+                placeholder="Ex: CRM, Owli, White Label, Implantação CRM"
             )
         with col_ex:
-            st.markdown("<div style='margin-top:28px;font-size:11px;color:#6A8FAF'>Exemplos: CRM · ERP · Owli · White Label · Implantação CRM · Atende</div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:28px;font-size:11px;color:#6A8FAF'>Exemplos:<br>CRM · ERP · CRM, Owli · ERP, White Label</div>", unsafe_allow_html=True)
 
-        if termo_busca.strip():
-            termo = termo_busca.strip().lower()
+        if termos_input.strip():
+            termos = [t.strip().lower() for t in termos_input.split(",") if t.strip()]
+            termos_label = " + ".join([t.strip() for t in termos_input.split(",") if t.strip()])
 
-            def has_termo_livre(val):
+            def has_termos(val):
                 if pd.isna(val): return False
-                return any(termo in item.strip().lower() for item in str(val).split(";"))
+                items_lower = [item.strip().lower() for item in str(val).split(";")]
+                return any(t in item for item in items_lower for t in termos)
 
-            df["has_termo"] = df[COL_LINE_ITEM].apply(has_termo_livre)
+            df["has_termo"] = df[COL_LINE_ITEM].apply(has_termos)
             n_com = df["has_termo"].sum()
             n_sem = (~df["has_termo"]).sum()
-            st.caption(f"COM '{termo_busca}': {n_com:,} negócios · SEM '{termo_busca}': {n_sem:,} negócios")
+            st.caption(f"Termos: **{termos_label}** · COM: {n_com:,} negócios · SEM: {n_sem:,} negócios")
 
             def build_termo_table(flag, label):
                 mask = df["has_termo"] == flag
@@ -1311,13 +1313,12 @@ def modulo_kenlo(df: pd.DataFrame):
 
             ti1, ti2 = st.columns(2)
             with ti1:
-                build_termo_table(True,  f"COM '{termo_busca}'")
+                build_termo_table(True,  f"COM: {termos_label}")
             with ti2:
-                build_termo_table(False, f"SEM '{termo_busca}'")
+                build_termo_table(False, f"SEM: {termos_label}")
 
-            # Gráfico
             fig_t_rows = []
-            for grupo, flag in [(f"COM '{termo_busca}'", True), (f"SEM '{termo_busca}'", False)]:
+            for grupo, flag in [(f"COM: {termos_label}", True), (f"SEM: {termos_label}", False)]:
                 mask = df["has_termo"] == flag
                 for ano in anos:
                     ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
@@ -1337,7 +1338,7 @@ def modulo_kenlo(df: pd.DataFrame):
             )
             st.plotly_chart(fig_t, width='stretch')
         else:
-            st.info("Digite um termo acima para ver a comparação.")
+            st.info("Digite um ou mais termos acima (separados por vírgula) para ver a comparação.")
     else:
         st.warning("Coluna 'Associated Line item' não encontrada no CSV.")
 
