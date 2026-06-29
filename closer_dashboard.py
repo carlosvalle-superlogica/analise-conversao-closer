@@ -259,10 +259,12 @@ def render_filtros(df: pd.DataFrame):
         ec1, ec2 = st.columns(2)
         with ec1:
             closers = sorted(df[COL_CLOSER].dropna().unique().tolist())
-            closer_sel = st.multiselect("Closer", closers, default=closers, key="closer_sel")
+            closer_sel = st.multiselect("Closer", closers, default=[], key="closer_sel",
+                                        placeholder="Todos (sem filtro)")
         with ec2:
             sdrs = sorted(df[COL_SDR].dropna().unique().tolist())
-            sdr_sel = st.multiselect("SDR Responsavel", sdrs, default=sdrs, key="sdr_sel")
+            sdr_sel = st.multiselect("SDR Responsavel", sdrs, default=[], key="sdr_sel",
+                                     placeholder="Todos (sem filtro)")
 
         st.markdown("---")
 
@@ -271,12 +273,15 @@ def render_filtros(df: pd.DataFrame):
         lc1, lc2, lc3 = st.columns(3)
         with lc1:
             origens = sorted(df[COL_ORIGEM].dropna().unique().tolist())
-            origem_sel = st.multiselect("Origem do Lead", origens, default=origens, key="origem_sel")
+            origem_sel = st.multiselect("Origem do Lead", origens, default=[], key="origem_sel",
+                                        placeholder="Todos (sem filtro)")
             tipos = sorted(df[COL_TIPO].dropna().unique().tolist())
-            tipo_sel = st.multiselect("Tipo de Lead", tipos, default=tipos, key="tipo_sel")
+            tipo_sel = st.multiselect("Tipo de Lead", tipos, default=[], key="tipo_sel",
+                                      placeholder="Todos (sem filtro)")
         with lc2:
             jornadas = sorted(df[COL_JORNADA].dropna().unique().tolist())
-            jornada_sel = st.multiselect("Jornada", jornadas, default=jornadas, key="jornada_sel")
+            jornada_sel = st.multiselect("Jornada", jornadas, default=[], key="jornada_sel",
+                                         placeholder="Todos (sem filtro)")
             etapa_sel = st.selectbox("Etapa", ["Todas", "Fechado", "Pago"], key="etapa_sel")
         with lc3:
             interesse_todos = explode_vals(COL_INTERESSE) if COL_INTERESSE in df.columns else []
@@ -1036,34 +1041,102 @@ def modulo_alerta(df: pd.DataFrame):
 
 # ─────────────────────────────────────────────
 # MÓDULO: KENLO vs NÃO-KENLO
-# Lógica independente dos filtros globais:
-#   RO  → agrupado pelo ANO da Reunião Ocorrida
-#   Fech → agrupado pelo ANO do Date entered Fechado
-#   Kenlo = valor exato "Kenlo (Ingaia)" no campo ERP (split por ;)
+# Lógica guiada por filtros locais dinâmicos
 # ─────────────────────────────────────────────
 def modulo_kenlo(df: pd.DataFrame):
     st.title("🔄 Kenlo vs Não-Kenlo")
-    st.caption("Reuniões = agrupadas pelo ano da Reunião Ocorrida · Fechados = agrupados pelo ano do Date entered Fechado")
-    st.caption("Kenlo = ERP que utiliza contém exatamente 'Kenlo (Ingaia)'")
 
-    # Flags (independente dos filtros globais)
     df = df.copy()
-    df["is_kenlo"] = df[COL_ERP].astype(object).fillna("").apply(
-        lambda x: "Kenlo (Ingaia)" in [p.strip() for p in x.split(";")]
-    )
     df["ano_reuniao"] = df[COL_REUNIAO].dt.year
     df["ano_fechado"] = df[COL_FECHAMENTO].dt.year
 
-    anos = [2024, 2025, 2026]
+    # ── Filtros locais ───────────────────────────────────────────────────
+    with st.expander("🔧 Filtros", expanded=True):
+        f1, f2, f3 = st.columns(3)
 
-    def build_table(kenlo_flag, label):
+        with f1:
+            st.markdown("**Anos**")
+            anos_check = [a for a in [2024, 2025, 2026]
+                          if st.checkbox(str(a), value=True, key=f"kenlo_ano_{a}")]
+            anos = anos_check if anos_check else [2024, 2025, 2026]
+
+        with f2:
+            erp_opts = sorted(set(
+                p.strip()
+                for val in df[COL_ERP].dropna()
+                for p in str(val).split(";") if p.strip()
+            ))
+            erp_k_sel = st.multiselect("ERP que utiliza (COM)",
+                default=["Kenlo (Ingaia)"] if "Kenlo (Ingaia)" in erp_opts else [],
+                options=erp_opts, key="kenlo_erp_sel",
+                placeholder="Selecione ERP...")
+            crm_opts = sorted(set(
+                p.strip()
+                for val in df[COL_CRM_USO].dropna()
+                for p in str(val).split(";") if p.strip()
+            ))
+            crm_k_sel = st.multiselect("CRM que utiliza",
+                default=[], options=crm_opts, key="kenlo_crm_sel",
+                placeholder="Todos (sem filtro)")
+
+        with f3:
+            closer_opts = ["(Sem Closer)"] + sorted(df[COL_CLOSER].dropna().unique().tolist())
+            closer_k_sel = st.multiselect("Closer",
+                default=[], options=closer_opts, key="kenlo_closer_sel",
+                placeholder="Todos (sem filtro)")
+            tipo_opts = sorted(df[COL_TIPO].dropna().unique().tolist())
+            tipo_k_sel = st.multiselect("Tipo de Lead",
+                default=[], options=tipo_opts, key="kenlo_tipo_sel",
+                placeholder="Todos (sem filtro)")
+            origem_opts = sorted(df[COL_ORIGEM].dropna().unique().tolist())
+            origem_k_sel = st.multiselect("Origem do Lead",
+                default=[], options=origem_opts, key="kenlo_origem_sel",
+                placeholder="Todos (sem filtro)")
+
+    # ── Máscara dimensional ──────────────────────────────────────────────
+    def mask_kenlo_dim(d):
+        m = pd.Series([True] * len(d), index=d.index)
+        if crm_k_sel:
+            m &= d[COL_CRM_USO].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in crm_k_sel))
+        if closer_k_sel:
+            sem_closer = "(Sem Closer)" in closer_k_sel
+            outros = [c for c in closer_k_sel if c != "(Sem Closer)"]
+            if sem_closer and outros:
+                m &= d[COL_CLOSER].isna() | d[COL_CLOSER].isin(outros)
+            elif sem_closer:
+                m &= d[COL_CLOSER].isna()
+            else:
+                m &= d[COL_CLOSER].isin(outros)
+        if tipo_k_sel:
+            m &= d[COL_TIPO].isin(tipo_k_sel)
+        if origem_k_sel:
+            m &= d[COL_ORIGEM].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in origem_k_sel))
+        return m
+
+    base_mask = mask_kenlo_dim(df)
+
+    # ── COM / SEM baseado no ERP selecionado ────────────────────────────
+    def match_erp(val, sel):
+        if not sel or pd.isna(val): return False
+        return any(s in [p.strip() for p in str(val).split(";")] for s in sel)
+
+    df["is_com"] = df[COL_ERP].apply(lambda x: match_erp(x, erp_k_sel))
+    df["is_sem"] = ~df["is_com"]
+    label_com = ("COM: " + " + ".join(erp_k_sel)) if erp_k_sel else "COM (sem ERP selecionado)"
+    label_sem = ("SEM: " + " + ".join(erp_k_sel)) if erp_k_sel else "SEM"
+
+    st.caption(f"Reuniões = ano da Reunião Ocorrida · Fechados = ano do Date entered Fechado · Anos: {anos}")
+
+    def build_table(is_com_flag, label):
         rows = []
+        mask = (df["is_com"] if is_com_flag else df["is_sem"]) & base_mask
         for ano in anos:
-            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kenlo_flag)].shape[0]
-            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kenlo_flag)].shape[0]
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & mask].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & mask].shape[0]
             conv = round(fech / ro * 100, 2) if ro > 0 else 0
             rows.append({"Ano": str(ano), "Reuniões Ocorridas": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"})
-        # Linha total
         ro_t   = sum(r["Reuniões Ocorridas"] for r in rows)
         fech_t = sum(r["Fechados"] for r in rows)
         conv_t = round(fech_t / ro_t * 100, 2) if ro_t > 0 else 0
@@ -1074,24 +1147,25 @@ def modulo_kenlo(df: pd.DataFrame):
     c1, c2 = st.columns(2)
 
     with c1:
-        secao("ERP Utiliza: Kenlo (Ingaia)")
-        tb_k = build_table(True, "Kenlo")
+        secao(label_com)
+        tb_k = build_table(True, label_com)
         st.dataframe(tb_k, hide_index=True, width='stretch',
                      height=(len(tb_k)+1)*38+10)
 
     with c2:
-        secao("ERP Utiliza: NÃO é Kenlo")
-        tb_nk = build_table(False, "Nao Kenlo")
+        secao(label_sem)
+        tb_nk = build_table(False, label_sem)
         st.dataframe(tb_nk, hide_index=True, width='stretch',
                      height=(len(tb_nk)+1)*38+10)
 
     # ── Gráfico de conversão comparativo ────────────────────────────────
     secao("Conversão R→F: Kenlo vs Não-Kenlo por Ano")
     fig_data = []
-    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+    for grupo, kflag in [(label_com, True), (label_sem, False)]:
+        mask_g = (df["is_com"] if kflag else df["is_sem"]) & base_mask
         for ano in anos:
-            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kflag)].shape[0]
-            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kflag)].shape[0]
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & mask_g].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & mask_g].shape[0]
             conv = round(fech / ro * 100, 2) if ro > 0 else 0
             fig_data.append({"Ano": str(ano), "Grupo": grupo, "Conv%": conv})
 
@@ -1112,11 +1186,12 @@ def modulo_kenlo(df: pd.DataFrame):
     # ── Variação ano a ano ───────────────────────────────────────────────
     secao("Variação Ano a Ano (pp = pontos percentuais)")
     var_rows = []
-    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+    for grupo, kflag in [(label_com, True), (label_sem, False)]:
         convs = {}
+        mask_v = (df["is_com"] if kflag else df["is_sem"]) & base_mask
         for ano in anos:
-            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & (df["is_kenlo"] == kflag)].shape[0]
-            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & (df["is_kenlo"] == kflag)].shape[0]
+            ro   = df[(df["ano_reuniao"] == ano) & df["is_reuniao"] & mask_v].shape[0]
+            fech = df[(df["ano_fechado"] == ano) & df["is_fechado"] & mask_v].shape[0]
             convs[ano] = round(fech / ro * 100, 2) if ro > 0 else 0
         var_rows.append({
             "Grupo":         grupo,
@@ -1133,7 +1208,7 @@ def modulo_kenlo(df: pd.DataFrame):
     def tabela_por_dim(col, titulo, kenlo_flag):
         valores = sorted(df[col].dropna().unique().tolist())
         valores = [v for v in valores if ";" not in str(v)]
-        mask_kenlo = df["is_kenlo"] == kenlo_flag
+        mask_kenlo = (df["is_com"] if kenlo_flag else df["is_sem"]) & base_mask
 
         rows = []
         for val in valores:
@@ -1184,10 +1259,10 @@ def modulo_kenlo(df: pd.DataFrame):
         )
         st.plotly_chart(fig, width='stretch')
 
-    tabela_por_dim(COL_TIPO,    "Tipo de Lead — Kenlo (Ingaia)",  True)
-    tabela_por_dim(COL_TIPO,    "Tipo de Lead — NÃO é Kenlo",     False)
-    tabela_por_dim(COL_JORNADA, "Jornada do Lead — Kenlo (Ingaia)", True)
-    tabela_por_dim(COL_JORNADA, "Jornada do Lead — NÃO é Kenlo",   False)
+    tabela_por_dim(COL_TIPO,    f"Tipo de Lead — {label_com}",  True)
+    tabela_por_dim(COL_TIPO,    f"Tipo de Lead — {label_sem}", False)
+    tabela_por_dim(COL_JORNADA, f"Jornada do Lead — {label_com}", True)
+    tabela_por_dim(COL_JORNADA, f"Jornada do Lead — {label_sem}", False)
 
     # Funil Completo: Lead→Contato→Agendamento→Reunião→Fechado
     secao("Funil Completo — Lead → Contato → Agendamento → Reuniao → Fechado")
@@ -1202,7 +1277,8 @@ def modulo_kenlo(df: pd.DataFrame):
     ]
 
     def get_funil_val(col, ano, kenlo_flag):
-        return df[(df[col].dt.year == ano) & (df["is_kenlo"] == kenlo_flag)].shape[0]
+        mask_f = (df["is_com"] if kenlo_flag else df["is_sem"]) & base_mask
+        return df[(df[col].dt.year == ano) & mask_f].shape[0]
 
     def conv_pct_funil(a, b):
         return round(a / b * 100, 1) if b > 0 else 0
@@ -1242,19 +1318,19 @@ def modulo_kenlo(df: pd.DataFrame):
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        st.markdown("##### Kenlo (Ingaia)")
+        st.markdown(f"##### {label_com}")
         tb_fk = build_funil_df(True)
         st.dataframe(tb_fk, hide_index=True, width="stretch",
                      height=(len(tb_fk)+1)*38+10)
     with fc2:
-        st.markdown("##### NAO e Kenlo")
+        st.markdown(f"##### {label_sem}")
         tb_fnk = build_funil_df(False)
         st.dataframe(tb_fnk, hide_index=True, width="stretch",
                      height=(len(tb_fnk)+1)*38+10)
 
     secao("Conversao Reuniao Fechado por Ano")
     fig_rf_rows = []
-    for grupo, kflag in [("Kenlo (Ingaia)", True), ("Nao Kenlo", False)]:
+    for grupo, kflag in [(label_com, True), (label_sem, False)]:
         for ano in anos:
             ro   = get_funil_val(COL_REUNIAO,    ano, kflag)
             fech = get_funil_val(COL_FECHAMENTO, ano, kflag)
