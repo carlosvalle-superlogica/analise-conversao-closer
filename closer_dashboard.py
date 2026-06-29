@@ -1258,38 +1258,71 @@ def modulo_kenlo(df: pd.DataFrame):
     )
     st.plotly_chart(fig_crm, width='stretch')
 
-    # ── Filtro dinâmico por Itens de Linha ───────────────────────────────
-    secao("Filtro Livre — Itens de Linha")
-    st.caption("Digite um ou mais termos separados por vírgula. O filtro considera qualquer item de linha que CONTENHA algum dos termos.")
+    # ── Construtor de Filtros — Itens de Linha ───────────────────────────
+    secao("Construtor de Filtros — Itens de Linha")
+    st.caption("Monte seu filtro com termos de inclusão e exclusão — igual ao HubSpot")
 
     if COL_LINE_ITEM in df.columns:
-        col_inp, col_ex = st.columns([2, 1])
-        with col_inp:
-            termos_input = st.text_input(
-                "Termos de busca (separe por vírgula)",
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            st.markdown("##### ✅ CONTÉM (pelo menos um desses termos)")
+            inclui_input = st.text_input(
+                "Inclui — separe por vírgula",
                 value="",
-                key="kenlo_termo_busca",
-                placeholder="Ex: CRM, Owli, White Label, Implantação CRM"
+                key="kenlo_inclui",
+                placeholder="Ex: ERP, White Label"
             )
-        with col_ex:
-            st.markdown("<div style='margin-top:28px;font-size:11px;color:#6A8FAF'>Exemplos:<br>CRM · ERP · CRM, Owli · ERP, White Label</div>", unsafe_allow_html=True)
+        with fc2:
+            st.markdown("##### ❌ NÃO CONTÉM (exclui se tiver qualquer um)")
+            exclui_input = st.text_input(
+                "Exclui — separe por vírgula",
+                value="",
+                key="kenlo_exclui",
+                placeholder="Ex: CRM Enterprise, Implantação CRM, atende"
+            )
 
-        if termos_input.strip():
-            termos = [t.strip().lower() for t in termos_input.split(",") if t.strip()]
-            termos_label = " + ".join([t.strip() for t in termos_input.split(",") if t.strip()])
+        inclui = [t.strip().lower() for t in inclui_input.split(",") if t.strip()]
+        exclui = [t.strip().lower() for t in exclui_input.split(",") if t.strip()]
 
-            def has_termos(val):
-                if pd.isna(val): return False
-                items_lower = [item.strip().lower() for item in str(val).split(";")]
-                return any(t in item for item in items_lower for t in termos)
+        if inclui or exclui:
+            def aplica_filtro(val):
+                if pd.isna(val):
+                    items = []
+                else:
+                    items = [i.strip().lower() for i in str(val).split(";")]
 
-            df["has_termo"] = df[COL_LINE_ITEM].apply(has_termos)
-            n_com = df["has_termo"].sum()
-            n_sem = (~df["has_termo"]).sum()
-            st.caption(f"Termos: **{termos_label}** · COM: {n_com:,} negócios · SEM: {n_sem:,} negócios")
+                # Deve conter pelo menos um dos termos de inclusão (se definido)
+                if inclui:
+                    tem_inclui = any(t in item for item in items for t in inclui)
+                    if not tem_inclui:
+                        return False
 
-            def build_termo_table(flag, label):
-                mask = df["has_termo"] == flag
+                # Não deve conter nenhum dos termos de exclusão (se definido)
+                if exclui:
+                    tem_exclui = any(t in item for item in items for t in exclui)
+                    if tem_exclui:
+                        return False
+
+                return True
+
+            df["passou_filtro"] = df[COL_LINE_ITEM].apply(aplica_filtro)
+            n_passou = df["passou_filtro"].sum()
+
+            # Label descritivo
+            label_parts = []
+            if inclui:
+                label_parts.append("CONTÉM: " + " + ".join([t.strip() for t in inclui_input.split(",") if t.strip()]))
+            if exclui:
+                label_parts.append("NÃO CONTÉM: " + " + ".join([t.strip() for t in exclui_input.split(",") if t.strip()]))
+            label_filtro = " · ".join(label_parts)
+
+            st.caption(f"Resultado: **{n_passou:,}** negócios passam pelo filtro ({label_filtro})")
+
+            # ── Tabelas ano a ano ─────────────────────────────────────────
+            t1, t2 = st.columns(2)
+
+            def build_filtro_table(flag, titulo):
+                mask = df["passou_filtro"] == flag
                 rows = []
                 prev_conv = None
                 for ano in anos:
@@ -1306,39 +1339,40 @@ def modulo_kenlo(df: pd.DataFrame):
                 conv_t = round(fech_t/ro_t*100, 2) if ro_t > 0 else 0
                 rows.append({"Ano": "TOTAL", "Reuniões": ro_t, "Fechados": fech_t,
                              "Conv R→F": f"{conv_t:.2f}%", "Var": ""})
-                st.markdown(f"##### {label}")
+                st.markdown(f"##### {titulo}")
                 tb = pd.DataFrame(rows)
                 st.dataframe(tb, hide_index=True, width='stretch',
                              height=(len(tb)+1)*38+10)
 
-            ti1, ti2 = st.columns(2)
-            with ti1:
-                build_termo_table(True,  f"COM: {termos_label}")
-            with ti2:
-                build_termo_table(False, f"SEM: {termos_label}")
+            with t1:
+                build_filtro_table(True,  f"Passou no filtro")
+            with t2:
+                build_filtro_table(False, f"Fora do filtro")
 
-            fig_t_rows = []
-            for grupo, flag in [(f"COM: {termos_label}", True), (f"SEM: {termos_label}", False)]:
-                mask = df["has_termo"] == flag
+            # ── Gráfico ───────────────────────────────────────────────────
+            fig_f_rows = []
+            for grupo, flag in [("Passou no filtro", True), ("Fora do filtro", False)]:
+                mask = df["passou_filtro"] == flag
                 for ano in anos:
                     ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
                     fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
                     conv = round(fech/ro*100, 2) if ro > 0 else 0
-                    fig_t_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
-            df_t = pd.DataFrame(fig_t_rows)
-            fig_t = px.bar(df_t, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                    fig_f_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+            df_f = pd.DataFrame(fig_f_rows)
+            fig_f = px.bar(df_f, x="Ano", y="Conv%", color="Grupo", barmode="group",
                            color_discrete_sequence=[COLORS[2], COLORS[5]],
-                           text=df_t["Conv%"].apply(lambda x: f"{x:.2f}%"))
-            fig_t.update_traces(textposition="outside")
-            fig_t.update_layout(
+                           text=df_f["Conv%"].apply(lambda x: f"{x:.2f}%"))
+            fig_f.update_traces(textposition="outside")
+            fig_f.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font_color="#EAEAEA", height=360,
                 margin=dict(l=0, r=0, t=30, b=0),
                 yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
             )
-            st.plotly_chart(fig_t, width='stretch')
+            st.plotly_chart(fig_f, width='stretch')
+
         else:
-            st.info("Digite um ou mais termos acima (separados por vírgula) para ver a comparação.")
+            st.info("Preencha pelo menos um campo acima para gerar a análise.")
     else:
         st.warning("Coluna 'Associated Line item' não encontrada no CSV.")
 
