@@ -110,6 +110,7 @@ COL_CRM_USO      = "[IS/SDR] Qual CRM utiliza?"
 COL_TAG          = "TAG - Comercial B2B"
 COL_CONTATO      = "Contato Realizado"
 COL_AGEND        = "[IS/SDR] Data do Agendamento"
+COL_LINE_ITEM    = "Associated Line item"
 
 ETAPAS_FECHADO = ["Fechado", "Pago"]
 
@@ -121,7 +122,7 @@ ETAPAS_FECHADO = ["Fechado", "Pago"]
 _COLS_USADAS = {
     COL_ID, COL_NOME, COL_CLOSER, COL_SDR, COL_ETAPA,
     COL_CRIACAO, COL_REUNIAO, COL_FECHAMENTO, COL_PAGO, COL_DATA_FECH,
-    COL_CONTATO, COL_AGEND,
+    COL_CONTATO, COL_AGEND, COL_LINE_ITEM,
     COL_PRODUTOS, COL_JORNADA, COL_TIPO, COL_ORIGEM,
     COL_CARTEIRA, COL_CONTRATOS,
     COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA,
@@ -1189,7 +1190,73 @@ def modulo_kenlo(df: pd.DataFrame):
     tabela_por_dim(COL_JORNADA, "Jornada do Lead — Kenlo (Ingaia)", True)
     tabela_por_dim(COL_JORNADA, "Jornada do Lead — NÃO é Kenlo",   False)
 
-    # Funil Completo: Lead→Contato→Agendamento→Reunião→Fechado
+    # ── COM CRM vs SEM CRM (Itens de Linha) ─────────────────────────────
+    secao("Itens de Linha: COM CRM vs SEM CRM — ano a ano")
+
+    COL_LINE = "Associated Line item"
+    TERMOS_CRM = [
+        "CRM Enterprise", "Arbo CRM Enterprise", "Implantação CRM",
+        "CRM - Enterprise", "Implantação - Enterprise",
+        "inteligência", "owli", "cobrança", "adesão", "atende"
+    ]
+
+    def has_crm_term(val):
+        if pd.isna(val): return False
+        items = [i.strip() for i in str(val).split(";")]
+        return any(t.lower() in item.lower() for item in items for t in TERMOS_CRM)
+
+    df["has_crm"] = df[COL_LINE].apply(has_crm_term) if COL_LINE in df.columns else pd.Series([False]*len(df))
+
+    def build_crm_table(crm_flag, label):
+        mask = df["has_crm"] == crm_flag
+        rows = []
+        prev_conv = None
+        for ano in anos:
+            ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+            fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+            conv = round(fech/ro*100, 2) if ro > 0 else 0
+            row  = {"Ano": str(ano), "Reuniões": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"}
+            if prev_conv is not None:
+                row["Var ano ant."] = f"{conv-prev_conv:+.2f}pp"
+            prev_conv = conv
+            rows.append(row)
+        # Total
+        ro_t   = df[df["is_reuniao"] & mask].shape[0]
+        fech_t = df[df["is_fechado"] & mask].shape[0]
+        conv_t = round(fech_t/ro_t*100, 2) if ro_t > 0 else 0
+        rows.append({"Ano": "TOTAL", "Reuniões": ro_t, "Fechados": fech_t, "Conv R→F": f"{conv_t:.2f}%", "Var ano ant.": ""})
+        st.markdown(f"##### {label}")
+        tb = pd.DataFrame(rows)
+        st.dataframe(tb, hide_index=True, width='stretch', height=(len(tb)+1)*38+10)
+
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        build_crm_table(True,  "COM CRM (contém os termos)")
+    with cc2:
+        build_crm_table(False, "SEM CRM (não contém os termos)")
+
+    # Gráfico comparativo
+    fig_crm_rows = []
+    for grupo, cflag in [("COM CRM", True), ("SEM CRM", False)]:
+        mask = df["has_crm"] == cflag
+        for ano in anos:
+            ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+            fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+            conv = round(fech/ro*100, 2) if ro > 0 else 0
+            fig_crm_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+
+    df_crm_fig = pd.DataFrame(fig_crm_rows)
+    fig_crm = px.bar(df_crm_fig, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                     color_discrete_sequence=[COLORS[2], COLORS[5]],
+                     text=df_crm_fig["Conv%"].apply(lambda x: f"{x:.2f}%"))
+    fig_crm.update_traces(textposition="outside")
+    fig_crm.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#EAEAEA", height=360,
+        margin=dict(l=0, r=0, t=30, b=0),
+        yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
+    )
+    st.plotly_chart(fig_crm, width='stretch')
     secao("Funil Completo — Lead → Contato → Agendamento → Reuniao → Fechado")
     st.caption("Cada etapa usa sua propria data")
 
