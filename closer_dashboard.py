@@ -1260,7 +1260,122 @@ def modulo_kenlo(df: pd.DataFrame):
 
     # ── Construtor de Filtros — Itens de Linha ───────────────────────────
     secao("Construtor de Filtros — Itens de Linha")
-    st.caption("Monte seu filtro com termos de inclusão e exclusão — igual ao HubSpot")
+    st.caption("Selecione produtos para incluir e/ou excluir — igual ao filtro do HubSpot")
+
+    if COL_LINE_ITEM in df.columns:
+        # Lista completa de itens únicos do CSV
+        all_line_items = sorted(set(
+            item.strip()
+            for val in df[COL_LINE_ITEM].dropna()
+            for item in str(val).split(";")
+            if item.strip()
+        ))
+
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            st.markdown("##### ✅ Nome CONTÉM qualquer um de")
+            inclui_sel = st.multiselect(
+                "Inclui (OR entre os selecionados)",
+                options=all_line_items,
+                default=[],
+                key="kenlo_inclui_sel",
+                placeholder="Selecione produtos a incluir..."
+            )
+        with fc2:
+            st.markdown("##### ❌ Nome NÃO CONTÉM nenhum de")
+            exclui_sel = st.multiselect(
+                "Exclui (remove se tiver qualquer um)",
+                options=all_line_items,
+                default=[],
+                key="kenlo_exclui_sel",
+                placeholder="Selecione produtos a excluir..."
+            )
+
+        if inclui_sel or exclui_sel:
+            def aplica_filtro(val):
+                if pd.isna(val):
+                    items = []
+                else:
+                    items = [i.strip() for i in str(val).split(";")]
+
+                # CONTÉM: deve ter pelo menos um dos selecionados (OR)
+                if inclui_sel:
+                    if not any(s in items for s in inclui_sel):
+                        return False
+
+                # NÃO CONTÉM: não pode ter nenhum dos selecionados
+                if exclui_sel:
+                    if any(s in items for s in exclui_sel):
+                        return False
+
+                return True
+
+            df["passou_filtro"] = df[COL_LINE_ITEM].apply(aplica_filtro)
+            n_passou = df["passou_filtro"].sum()
+            n_fora   = (~df["passou_filtro"]).sum()
+
+            label_parts = []
+            if inclui_sel:
+                label_parts.append(f"CONTÉM: {', '.join(inclui_sel[:3])}{'...' if len(inclui_sel) > 3 else ''} ({len(inclui_sel)} itens)")
+            if exclui_sel:
+                label_parts.append(f"NÃO CONTÉM: {', '.join(exclui_sel[:3])}{'...' if len(exclui_sel) > 3 else ''} ({len(exclui_sel)} itens)")
+            st.caption(f"Resultado: **{n_passou:,}** passam · **{n_fora:,}** fora do filtro · {' · '.join(label_parts)}")
+
+            def build_filtro_table(flag, titulo):
+                mask = df["passou_filtro"] == flag
+                rows = []
+                prev_conv = None
+                for ano in anos:
+                    ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+                    fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+                    conv = round(fech/ro*100, 2) if ro > 0 else 0
+                    row  = {"Ano": str(ano), "Reuniões": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"}
+                    if prev_conv is not None:
+                        row["Var"] = f"{conv-prev_conv:+.2f}pp"
+                    prev_conv = conv
+                    rows.append(row)
+                ro_t   = df[df["is_reuniao"] & mask].shape[0]
+                fech_t = df[df["is_fechado"] & mask].shape[0]
+                conv_t = round(fech_t/ro_t*100, 2) if ro_t > 0 else 0
+                rows.append({"Ano": "TOTAL", "Reuniões": ro_t, "Fechados": fech_t,
+                             "Conv R→F": f"{conv_t:.2f}%", "Var": ""})
+                st.markdown(f"##### {titulo}")
+                tb = pd.DataFrame(rows)
+                st.dataframe(tb, hide_index=True, width='stretch',
+                             height=(len(tb)+1)*38+10)
+
+            ti1, ti2 = st.columns(2)
+            with ti1:
+                build_filtro_table(True,  "Passou no filtro")
+            with ti2:
+                build_filtro_table(False, "Fora do filtro")
+
+            # Gráfico comparativo
+            fig_f_rows = []
+            for grupo, flag in [("Passou no filtro", True), ("Fora do filtro", False)]:
+                mask = df["passou_filtro"] == flag
+                for ano in anos:
+                    ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+                    fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+                    conv = round(fech/ro*100, 2) if ro > 0 else 0
+                    fig_f_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+            df_f = pd.DataFrame(fig_f_rows)
+            fig_f = px.bar(df_f, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                           color_discrete_sequence=[COLORS[2], COLORS[5]],
+                           text=df_f["Conv%"].apply(lambda x: f"{x:.2f}%"))
+            fig_f.update_traces(textposition="outside")
+            fig_f.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=360,
+                margin=dict(l=0, r=0, t=30, b=0),
+                yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
+            )
+            st.plotly_chart(fig_f, width='stretch')
+        else:
+            st.info("Selecione produtos em pelo menos um dos campos acima para gerar a análise.")
+    else:
+        st.warning("Coluna 'Associated Line item' não encontrada no CSV.")
+
 
     if COL_LINE_ITEM in df.columns:
         fc1, fc2 = st.columns(2)
