@@ -110,6 +110,7 @@ COL_CRM_USO      = "[IS/SDR] Qual CRM utiliza?"
 COL_TAG          = "TAG - Comercial B2B"
 COL_CONTATO      = "Contato Realizado"
 COL_AGEND        = "[IS/SDR] Data do Agendamento"
+COL_LINE_ITEM    = "Associated Line item"
 
 ETAPAS_FECHADO = ["Fechado", "Pago"]
 
@@ -126,6 +127,7 @@ _COLS_USADAS = {
     COL_CARTEIRA, COL_CONTRATOS,
     COL_MOTIVO_PERDA, COL_SUBMOTIVO, COL_DESC_PERDA,
     COL_ERP, COL_CRM_USO, COL_INTERESSE, COL_TAG, COL_VALOR,
+    COL_LINE_ITEM,
 }
 
 @st.cache_data(show_spinner="Carregando dados…", max_entries=1)
@@ -1093,6 +1095,28 @@ def modulo_kenlo(df: pd.DataFrame):
                 default=[], options=origem_opts, key="kenlo_origem_sel",
                 placeholder="Todos (sem filtro)")
 
+        f4, f5 = st.columns(2)
+
+        with f4:
+            produtos_opts = sorted(set(
+                p.strip()
+                for val in df[COL_PRODUTOS].dropna()
+                for p in str(val).split(";") if p.strip()
+            ))
+            produtos_k_sel = st.multiselect("Produtos Fechados",
+                default=[], options=produtos_opts, key="kenlo_produtos_sel",
+                placeholder="Todos (sem filtro)")
+
+        with f5:
+            line_item_opts = sorted(set(
+                p.strip()
+                for val in df[COL_LINE_ITEM].dropna()
+                for p in str(val).split(";") if p.strip()
+            ))
+            line_item_k_sel = st.multiselect("Itens de Linha",
+                default=[], options=line_item_opts, key="kenlo_line_item_sel",
+                placeholder="Todos (sem filtro)")
+
     # ── Máscara dimensional ──────────────────────────────────────────────
     def mask_kenlo_dim(d):
         m = pd.Series([True] * len(d), index=d.index)
@@ -1113,6 +1137,12 @@ def modulo_kenlo(df: pd.DataFrame):
         if origem_k_sel:
             m &= d[COL_ORIGEM].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in origem_k_sel))
+        if produtos_k_sel:
+            m &= d[COL_PRODUTOS].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in produtos_k_sel))
+        if line_item_k_sel:
+            m &= d[COL_LINE_ITEM].astype(object).fillna("").apply(
+                lambda x: any(p in [s.strip() for s in x.split(";")] for p in line_item_k_sel))
         return m
 
     base_mask = mask_kenlo_dim(df)
