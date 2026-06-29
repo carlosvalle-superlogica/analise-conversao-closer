@@ -1257,7 +1257,92 @@ def modulo_kenlo(df: pd.DataFrame):
         yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
     )
     st.plotly_chart(fig_crm, width='stretch')
-    secao("Funil Completo — Lead → Contato → Agendamento → Reuniao → Fechado")
+
+    # ── Filtro dinâmico por Itens de Linha ───────────────────────────────
+    secao("Filtro Livre — Itens de Linha")
+    st.caption("Selecione itens de linha para comparar COM vs SEM esses itens")
+
+    if COL_LINE_ITEM in df.columns:
+        # Todos os itens únicos do CSV
+        all_line_items = sorted(set(
+            item.strip()
+            for val in df[COL_LINE_ITEM].dropna()
+            for item in str(val).split(";")
+            if item.strip()
+        ))
+
+        itens_sel = st.multiselect(
+            "Selecionar Itens de Linha",
+            options=all_line_items,
+            default=[],
+            key="kenlo_itens_sel",
+            placeholder="Escolha um ou mais itens para filtrar..."
+        )
+
+        if itens_sel:
+            def has_item_sel(val):
+                if pd.isna(val): return False
+                items = [i.strip() for i in str(val).split(";")]
+                return any(s in items for s in itens_sel)
+
+            df["has_item_sel"] = df[COL_LINE_ITEM].apply(has_item_sel)
+
+            def build_item_table(flag, label):
+                mask = df["has_item_sel"] == flag
+                rows = []
+                prev_conv = None
+                for ano in anos:
+                    ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+                    fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+                    conv = round(fech/ro*100, 2) if ro > 0 else 0
+                    row  = {"Ano": str(ano), "Reuniões": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"}
+                    if prev_conv is not None:
+                        row["Var"] = f"{conv-prev_conv:+.2f}pp"
+                    prev_conv = conv
+                    rows.append(row)
+                ro_t   = df[df["is_reuniao"] & mask].shape[0]
+                fech_t = df[df["is_fechado"] & mask].shape[0]
+                conv_t = round(fech_t/ro_t*100, 2) if ro_t > 0 else 0
+                rows.append({"Ano": "TOTAL", "Reuniões": ro_t, "Fechados": fech_t,
+                              "Conv R→F": f"{conv_t:.2f}%", "Var": ""})
+                st.markdown(f"##### {label}")
+                tb = pd.DataFrame(rows)
+                st.dataframe(tb, hide_index=True, width='stretch',
+                             height=(len(tb)+1)*38+10)
+
+            ci1, ci2 = st.columns(2)
+            with ci1:
+                build_item_table(True,  "COM os itens selecionados")
+            with ci2:
+                build_item_table(False, "SEM os itens selecionados")
+
+            # Gráfico comparativo
+            fig_item_rows = []
+            for grupo, flag in [("COM itens", True), ("SEM itens", False)]:
+                mask = df["has_item_sel"] == flag
+                for ano in anos:
+                    ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
+                    fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
+                    conv = round(fech/ro*100, 2) if ro > 0 else 0
+                    fig_item_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+            df_item_fig = pd.DataFrame(fig_item_rows)
+            fig_item = px.bar(df_item_fig, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                              color_discrete_sequence=[COLORS[2], COLORS[5]],
+                              text=df_item_fig["Conv%"].apply(lambda x: f"{x:.2f}%"))
+            fig_item.update_traces(textposition="outside")
+            fig_item.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#EAEAEA", height=360,
+                margin=dict(l=0, r=0, t=30, b=0),
+                yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
+            )
+            st.plotly_chart(fig_item, width='stretch')
+        else:
+            st.info("Selecione um ou mais itens de linha acima para ver a comparação.")
+    else:
+        st.warning("Coluna 'Associated Line item' não encontrada no CSV.")
+
+
     st.caption("Cada etapa usa sua propria data")
 
     ETAPAS_FUNIL = [
