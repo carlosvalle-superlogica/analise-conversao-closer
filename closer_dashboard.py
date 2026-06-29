@@ -1260,35 +1260,34 @@ def modulo_kenlo(df: pd.DataFrame):
 
     # ── Filtro dinâmico por Itens de Linha ───────────────────────────────
     secao("Filtro Livre — Itens de Linha")
-    st.caption("Selecione itens de linha para comparar COM vs SEM esses itens")
+    st.caption("Digite um termo para filtrar negócios cujos itens de linha CONTÊM esse texto")
 
     if COL_LINE_ITEM in df.columns:
-        # Todos os itens únicos do CSV
-        all_line_items = sorted(set(
-            item.strip()
-            for val in df[COL_LINE_ITEM].dropna()
-            for item in str(val).split(";")
-            if item.strip()
-        ))
+        col_inp, col_ex = st.columns([2, 1])
+        with col_inp:
+            termo_busca = st.text_input(
+                "Termo de busca (ex: CRM, ERP, Owli, White Label...)",
+                value="",
+                key="kenlo_termo_busca",
+                placeholder="Digite parte do nome do item de linha..."
+            )
+        with col_ex:
+            st.markdown("<div style='margin-top:28px;font-size:11px;color:#6A8FAF'>Exemplos: CRM · ERP · Owli · White Label · Implantação CRM · Atende</div>", unsafe_allow_html=True)
 
-        itens_sel = st.multiselect(
-            "Selecionar Itens de Linha",
-            options=all_line_items,
-            default=[],
-            key="kenlo_itens_sel",
-            placeholder="Escolha um ou mais itens para filtrar..."
-        )
+        if termo_busca.strip():
+            termo = termo_busca.strip().lower()
 
-        if itens_sel:
-            def has_item_sel(val):
+            def has_termo_livre(val):
                 if pd.isna(val): return False
-                items = [i.strip() for i in str(val).split(";")]
-                return any(s in items for s in itens_sel)
+                return any(termo in item.strip().lower() for item in str(val).split(";"))
 
-            df["has_item_sel"] = df[COL_LINE_ITEM].apply(has_item_sel)
+            df["has_termo"] = df[COL_LINE_ITEM].apply(has_termo_livre)
+            n_com = df["has_termo"].sum()
+            n_sem = (~df["has_termo"]).sum()
+            st.caption(f"COM '{termo_busca}': {n_com:,} negócios · SEM '{termo_busca}': {n_sem:,} negócios")
 
-            def build_item_table(flag, label):
-                mask = df["has_item_sel"] == flag
+            def build_termo_table(flag, label):
+                mask = df["has_termo"] == flag
                 rows = []
                 prev_conv = None
                 for ano in anos:
@@ -1304,41 +1303,41 @@ def modulo_kenlo(df: pd.DataFrame):
                 fech_t = df[df["is_fechado"] & mask].shape[0]
                 conv_t = round(fech_t/ro_t*100, 2) if ro_t > 0 else 0
                 rows.append({"Ano": "TOTAL", "Reuniões": ro_t, "Fechados": fech_t,
-                              "Conv R→F": f"{conv_t:.2f}%", "Var": ""})
+                             "Conv R→F": f"{conv_t:.2f}%", "Var": ""})
                 st.markdown(f"##### {label}")
                 tb = pd.DataFrame(rows)
                 st.dataframe(tb, hide_index=True, width='stretch',
                              height=(len(tb)+1)*38+10)
 
-            ci1, ci2 = st.columns(2)
-            with ci1:
-                build_item_table(True,  "COM os itens selecionados")
-            with ci2:
-                build_item_table(False, "SEM os itens selecionados")
+            ti1, ti2 = st.columns(2)
+            with ti1:
+                build_termo_table(True,  f"COM '{termo_busca}'")
+            with ti2:
+                build_termo_table(False, f"SEM '{termo_busca}'")
 
-            # Gráfico comparativo
-            fig_item_rows = []
-            for grupo, flag in [("COM itens", True), ("SEM itens", False)]:
-                mask = df["has_item_sel"] == flag
+            # Gráfico
+            fig_t_rows = []
+            for grupo, flag in [(f"COM '{termo_busca}'", True), (f"SEM '{termo_busca}'", False)]:
+                mask = df["has_termo"] == flag
                 for ano in anos:
                     ro   = df[(df["ano_reuniao"]==ano) & df["is_reuniao"] & mask].shape[0]
                     fech = df[(df["ano_fechado"]==ano)  & df["is_fechado"] & mask].shape[0]
                     conv = round(fech/ro*100, 2) if ro > 0 else 0
-                    fig_item_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
-            df_item_fig = pd.DataFrame(fig_item_rows)
-            fig_item = px.bar(df_item_fig, x="Ano", y="Conv%", color="Grupo", barmode="group",
-                              color_discrete_sequence=[COLORS[2], COLORS[5]],
-                              text=df_item_fig["Conv%"].apply(lambda x: f"{x:.2f}%"))
-            fig_item.update_traces(textposition="outside")
-            fig_item.update_layout(
+                    fig_t_rows.append({"Grupo": grupo, "Ano": str(ano), "Conv%": conv})
+            df_t = pd.DataFrame(fig_t_rows)
+            fig_t = px.bar(df_t, x="Ano", y="Conv%", color="Grupo", barmode="group",
+                           color_discrete_sequence=[COLORS[2], COLORS[5]],
+                           text=df_t["Conv%"].apply(lambda x: f"{x:.2f}%"))
+            fig_t.update_traces(textposition="outside")
+            fig_t.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font_color="#EAEAEA", height=360,
                 margin=dict(l=0, r=0, t=30, b=0),
                 yaxis_title="Conv R→F (%)", legend=dict(bgcolor="rgba(0,0,0,0)")
             )
-            st.plotly_chart(fig_item, width='stretch')
+            st.plotly_chart(fig_t, width='stretch')
         else:
-            st.info("Selecione um ou mais itens de linha acima para ver a comparação.")
+            st.info("Digite um termo acima para ver a comparação.")
     else:
         st.warning("Coluna 'Associated Line item' não encontrada no CSV.")
 
