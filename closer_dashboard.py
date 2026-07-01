@@ -326,7 +326,13 @@ def render_filtros(df: pd.DataFrame):
     _all_jornadas= set(df[COL_JORNADA].dropna().unique().tolist())
     _all_tipos   = set(df[COL_TIPO].dropna().unique().tolist())
 
-    def mask_dim(d):
+    def mask_dim(d, include_produto=True):
+        """
+        Máscara dimensional.
+        include_produto=False → exclui Produto Fechado e Item de Linha.
+        Usado em df_reunioes e df_perdidos: filtros de produto só fazem sentido
+        em registros fechados — aplicá-los em RO distorceria a conversão.
+        """
         m = pd.Series([True] * len(d), index=d.index)
         if etapa_sel != "Todas":
             m &= d[COL_ETAPA] == etapa_sel
@@ -344,17 +350,9 @@ def render_filtros(df: pd.DataFrame):
             )
         if tipo_sel:
             m &= d[COL_TIPO].isin(tipo_sel)
-        if produto_sel:
-            m &= d[COL_PRODUTOS].astype(object).fillna("").apply(
-                lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
-            )
         if interesse_sel and COL_INTERESSE in d.columns:
             m &= d[COL_INTERESSE].astype(object).fillna("").apply(
                 lambda x: any(p in [s.strip() for s in x.split(";")] for p in interesse_sel)
-            )
-        if line_item_sel and COL_LINE_ITEM in d.columns:
-            m &= d[COL_LINE_ITEM].astype(object).fillna("").apply(
-                lambda x: any(p in [s.strip() for s in x.split(";")] for p in line_item_sel)
             )
         if erp_sel and COL_ERP in d.columns:
             m &= d[COL_ERP].astype(object).fillna("").apply(
@@ -366,14 +364,24 @@ def render_filtros(df: pd.DataFrame):
             )
         if tag_sel and COL_TAG in d.columns:
             m &= d[COL_TAG].isin(tag_sel)
+        # Produto Fechado e Item de Linha: só aplicar em fechados
+        if include_produto:
+            if produto_sel:
+                m &= d[COL_PRODUTOS].astype(object).fillna("").apply(
+                    lambda x: any(p in [s.strip() for s in x.split(";")] for p in produto_sel)
+                )
+            if line_item_sel and COL_LINE_ITEM in d.columns:
+                m &= d[COL_LINE_ITEM].astype(object).fillna("").apply(
+                    lambda x: any(p in [s.strip() for s in x.split(";")] for p in line_item_sel)
+                )
         return m
 
-    df_leads = df[mask_dim(df)].copy()
+    df_leads = df[mask_dim(df, include_produto=False)].copy()
 
     m_reun = df["is_reuniao"].copy()
     if r_R[0] and r_R[1]:
         m_reun &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
-    df_reunioes = df[m_reun & mask_dim(df)].copy()
+    df_reunioes = df[m_reun & mask_dim(df, include_produto=False)].copy()
 
     m_fech = df["is_fechado"].copy()
     if r_F[0] and r_F[1]:
@@ -382,12 +390,12 @@ def render_filtros(df: pd.DataFrame):
         m_fech &= df[COL_ETAPA] == "Fechado"
     elif etapa_sel == "Pago":
         m_fech &= df[COL_ETAPA] == "Pago"
-    df_fechados = df[m_fech & mask_dim(df)].copy()
+    df_fechados = df[m_fech & mask_dim(df, include_produto=True)].copy()
 
-    m_perd = df["is_perdido"]  # is_perdido ja inclui filtro de reuniao ocorrida
+    m_perd = df["is_perdido"]
     if r_R[0] and r_R[1]:
         m_perd &= df[COL_REUNIAO].dt.date.between(r_R[0], r_R[1])
-    df_perdidos = df[m_perd & mask_dim(df)].copy()
+    df_perdidos = df[m_perd & mask_dim(df, include_produto=False)].copy()
 
     return df_leads, df_reunioes, df_fechados, df_perdidos
 
@@ -1056,17 +1064,17 @@ def modulo_kenlo(df: pd.DataFrame):
     st.title("🔄 Kenlo vs Não-Kenlo")
 
     # ── Filtros globais ──────────────────────────────────────────────────
-    # df_fechados = negócios que fecharam no período selecionado, com todos
-    # os filtros dimensionais aplicados. É a base de comparação — igual ao
-    # HubSpot que ancora tudo na data de fechamento.
+    # df_reunioes: período de reunião, SEM filtro de produto/item de linha
+    # df_fechados: período de fechamento, COM filtro de produto/item de linha
+    # Isso garante que RO reflita o funil completo independente do produto fechado
     df_leads, df_reunioes, df_fechados, _ = render_filtros(df)
 
-    # ── Anos dinâmicos — derivados SÓ do período de fechamento ───────────
-    # RO e Fechados são contados dentro dos negócios que fecharam no período.
-    # Igual ao HubSpot: filtro por data de fechamento, não por data de reunião.
-    anos = sorted(df_fechados[COL_FECHAMENTO].dt.year.dropna().astype(int).unique().tolist())
+    # ── Anos dinâmicos — união de anos de reunião e de fechamento ─────────
+    anos_reun = set(df_reunioes[COL_REUNIAO].dt.year.dropna().astype(int).unique())
+    anos_fech = set(df_fechados[COL_FECHAMENTO].dt.year.dropna().astype(int).unique())
+    anos = sorted(anos_reun | anos_fech)
     if not anos:
-        st.warning("Nenhum dado no período de fechamento selecionado.")
+        st.warning("Nenhum dado no período selecionado.")
         return
 
     # ── Filtro local exclusivo: seleção COM / SEM ────────────────────────
@@ -1083,31 +1091,34 @@ def modulo_kenlo(df: pd.DataFrame):
             placeholder="Selecione ERP para comparar..."
         )
 
-    # ── Adiciona ano_fechado e flags COM/SEM ─────────────────────────────
+    # ── Adiciona colunas de ano e flags COM/SEM ───────────────────────────
     def match_erp(val, sel):
         if not sel or pd.isna(val): return False
         return any(s in [p.strip() for p in str(val).split(";")] for s in sel)
 
-    for d in [df_leads, df_reunioes, df_fechados]:
-        d["ano_fechado"] = d[COL_FECHAMENTO].dt.year.astype("Int64")
+    df_reunioes["ano_reuniao"] = df_reunioes[COL_REUNIAO].dt.year.astype("Int64")
+    df_fechados["ano_fechado"] = df_fechados[COL_FECHAMENTO].dt.year.astype("Int64")
+
+    for d in [df_reunioes, df_fechados]:
         d["is_com"] = d[COL_ERP].apply(lambda x: match_erp(x, erp_k_sel))
         d["is_sem"] = ~d["is_com"]
 
     label_com = ("COM: " + " + ".join(erp_k_sel)) if erp_k_sel else "COM (sem ERP selecionado)"
     label_sem = ("SEM: " + " + ".join(erp_k_sel)) if erp_k_sel else "SEM"
 
-    st.caption(f"Anos no período: {anos} · Base = negócios que fecharam no período · RO = tinham reunião ocorrida · igual ao HubSpot")
+    st.caption(
+        f"Anos: {anos} · "
+        f"RO = reuniões no período de reunião (sem filtro de produto) · "
+        f"Fechados = fechados no período de fechamento (com filtro de produto)"
+    )
 
     def build_table(is_com_flag, label):
-        # Ancoragem na data de fechamento — igual ao HubSpot
-        # RO = fechados no período que tinham reunião ocorrida
-        # Fechados = total de fechados no período
+        df_r = df_reunioes[df_reunioes["is_com"] if is_com_flag else df_reunioes["is_sem"]]
         df_f = df_fechados[df_fechados["is_com"] if is_com_flag else df_fechados["is_sem"]]
         rows = []
         for ano in anos:
-            df_ano = df_f[df_f["ano_fechado"] == ano]
-            fech = len(df_ano)
-            ro   = int(df_ano["is_reuniao"].sum())
+            ro   = len(df_r[df_r["ano_reuniao"] == ano])
+            fech = len(df_f[df_f["ano_fechado"]  == ano])
             conv = round(fech / ro * 100, 2) if ro > 0 else 0
             rows.append({"Ano": str(ano), "Reuniões Ocorridas": ro, "Fechados": fech, "Conv R→F": f"{conv:.2f}%"})
         ro_t   = sum(r["Reuniões Ocorridas"] for r in rows)
@@ -1135,11 +1146,11 @@ def modulo_kenlo(df: pd.DataFrame):
     secao("Conversão R→F: Kenlo vs Não-Kenlo por Ano")
     fig_data = []
     for grupo, is_com_flag in [(label_com, True), (label_sem, False)]:
+        df_r = df_reunioes[df_reunioes["is_com"] if is_com_flag else df_reunioes["is_sem"]]
         df_f = df_fechados[df_fechados["is_com"] if is_com_flag else df_fechados["is_sem"]]
         for ano in anos:
-            df_ano = df_f[df_f["ano_fechado"] == ano]
-            fech = len(df_ano)
-            ro   = int(df_ano["is_reuniao"].sum())
+            ro   = len(df_r[df_r["ano_reuniao"] == ano])
+            fech = len(df_f[df_f["ano_fechado"]  == ano])
             conv = round(fech / ro * 100, 2) if ro > 0 else 0
             fig_data.append({"Ano": str(ano), "Grupo": grupo, "Conv%": conv})
 
@@ -1161,12 +1172,12 @@ def modulo_kenlo(df: pd.DataFrame):
     secao("Variação Ano a Ano (pp = pontos percentuais)")
     var_rows = []
     for grupo, is_com_flag in [(label_com, True), (label_sem, False)]:
+        df_r = df_reunioes[df_reunioes["is_com"] if is_com_flag else df_reunioes["is_sem"]]
         df_f = df_fechados[df_fechados["is_com"] if is_com_flag else df_fechados["is_sem"]]
         convs = {}
         for ano in anos:
-            df_ano = df_f[df_f["ano_fechado"] == ano]
-            fech = len(df_ano)
-            ro   = int(df_ano["is_reuniao"].sum())
+            ro   = len(df_r[df_r["ano_reuniao"] == ano])
+            fech = len(df_f[df_f["ano_fechado"]  == ano])
             convs[ano] = round(fech / ro * 100, 2) if ro > 0 else 0
         row = {"Grupo": grupo}
         anos_sorted = sorted(convs.keys())
@@ -1181,6 +1192,7 @@ def modulo_kenlo(df: pd.DataFrame):
 
     # ── Helper: tabela ano a ano por dimensão ────────────────────────────
     def tabela_por_dim(col, titulo, is_com_flag):
+        df_r = df_reunioes[df_reunioes["is_com"] if is_com_flag else df_reunioes["is_sem"]]
         df_f = df_fechados[df_fechados["is_com"] if is_com_flag else df_fechados["is_sem"]]
         valores = sorted(set(
             v.strip()
@@ -1195,10 +1207,8 @@ def modulo_kenlo(df: pd.DataFrame):
             row = {"Dimensão": val}
             prev_conv = None
             for ano in anos:
-                df_ano = df_f[df_f["ano_fechado"] == ano]
-                df_val = df_ano[df_ano[col].astype(object).fillna("").apply(has_val)]
-                fech = len(df_val)
-                ro   = int(df_val["is_reuniao"].sum())
+                ro   = len(df_r[df_r["ano_reuniao"] == ano][col].astype(object).fillna("").loc[lambda s: s.apply(has_val)])
+                fech = len(df_f[df_f["ano_fechado"]  == ano][col].astype(object).fillna("").loc[lambda s: s.apply(has_val)])
                 conv = round(fech / ro * 100, 2) if ro > 0 else 0
                 row[f"RO {ano}"]   = ro
                 row[f"Fech {ano}"] = fech
@@ -1219,10 +1229,8 @@ def modulo_kenlo(df: pd.DataFrame):
             def has_val(x, v=val):
                 return v in [p.strip() for p in str(x).split(";")]
             for ano in anos:
-                df_ano = df_f[df_f["ano_fechado"] == ano]
-                df_val = df_ano[df_ano[col].astype(object).fillna("").apply(has_val)]
-                fech = len(df_val)
-                ro   = int(df_val["is_reuniao"].sum())
+                ro   = len(df_r[df_r["ano_reuniao"] == ano][col].astype(object).fillna("").loc[lambda s: s.apply(has_val)])
+                fech = len(df_f[df_f["ano_fechado"]  == ano][col].astype(object).fillna("").loc[lambda s: s.apply(has_val)])
                 conv = round(fech / ro * 100, 2) if ro > 0 else 0
                 fig_rows.append({"Dimensão": val, "Ano": str(ano), "Conv%": conv})
 
